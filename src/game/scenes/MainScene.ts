@@ -1,37 +1,44 @@
 import Phaser from 'phaser';
 
 const TILE_SIZE = 32;
-const MAP_WIDTH = 100;
-const MAP_HEIGHT = 100;
+const MAP_WIDTH = 60;
+const MAP_HEIGHT = 60;
 const PLAYER_SPEED = 400;
 
-// Terrain types
+// City terrain types
 const TERRAIN = {
-  GRASS: 0,
-  WATER: 1,
-  SAND: 2,
-  DUNGEON: 3,
-  STONE: 4,
-  FLOWER: 5,
-  PATH: 6,
+  ROAD: 0,
+  SIDEWALK: 1,
+  GRASS: 2,
+  BUILDING: 3,
+  PARK: 4,
+  CROSSWALK: 5,
 };
 
-// Questions for interactive objects
-const QUESTIONS = [
-  { q: "What is 2 + 2?", a: "4" },
-  { q: "What color is the sky?", a: "Blue" },
-  { q: "How many days in a week?", a: "7" },
-  { q: "What is the capital of France?", a: "Paris" },
-  { q: "What planet are we on?", a: "Earth" },
-  { q: "How many legs does a spider have?", a: "8" },
-  { q: "What is H2O?", a: "Water" },
-  { q: "What is 10 x 10?", a: "100" },
+// CTF Questions with varying difficulty
+const CTF_QUESTIONS = [
+  { q: "What does HTML stand for?", a: "hypertext markup language", hint: "Web basics", points: 10 },
+  { q: "What port does HTTP use by default?", a: "80", hint: "Networking", points: 15 },
+  { q: "What is 0x1F in decimal?", a: "31", hint: "Hex conversion", points: 20 },
+  { q: "What command lists files in Linux?", a: "ls", hint: "Linux basics", points: 10 },
+  { q: "What does SQL stand for?", a: "structured query language", hint: "Databases", points: 15 },
+  { q: "What is the binary of 42?", a: "101010", hint: "Binary conversion", points: 20 },
+  { q: "What protocol encrypts HTTP?", a: "https", hint: "Security", points: 15 },
+  { q: "What port does SSH use?", a: "22", hint: "Networking", points: 15 },
+  { q: "What is 2^10?", a: "1024", hint: "Powers of 2", points: 10 },
+  { q: "What does CPU stand for?", a: "central processing unit", hint: "Hardware", points: 10 },
+  { q: "What is the localhost IP?", a: "127.0.0.1", hint: "Networking", points: 15 },
+  { q: "What encoding uses A-Z, a-z, 0-9, +, /?", a: "base64", hint: "Encoding", points: 20 },
+  { q: "What does API stand for?", a: "application programming interface", hint: "Development", points: 15 },
+  { q: "What is ROT13 of 'hello'?", a: "uryyb", hint: "Cipher", points: 25 },
+  { q: "What file extension do Python scripts use?", a: "py", hint: "Programming", points: 10 },
 ];
 
 interface InteractiveObject {
   container: Phaser.GameObjects.Container;
   type: string;
-  question: { q: string; a: string };
+  question: { q: string; a: string; hint: string; points: number };
+  solved: boolean;
 }
 
 export class MainScene extends Phaser.Scene {
@@ -43,19 +50,24 @@ export class MainScene extends Phaser.Scene {
   private terrainGraphics!: Phaser.GameObjects.Graphics;
   private decorations!: Phaser.GameObjects.Group;
   private positionText!: Phaser.GameObjects.Text;
+  private scoreText!: Phaser.GameObjects.Text;
   private interactiveObjects: InteractiveObject[] = [];
   private questionBox!: Phaser.GameObjects.Container;
   private isQuestionOpen = false;
   private interactHint!: Phaser.GameObjects.Container;
+  private currentQuestion: InteractiveObject | null = null;
+  private answerInput = '';
+  private score = 0;
+  private inputText!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: 'MainScene' });
   }
 
   create() {
-    this.generateMap();
+    this.generateCityMap();
     this.createTerrain();
-    this.createDecorations();
+    this.createCityDecorations();
     this.createInteractiveObjects();
     this.createPlayer();
     this.setupCamera();
@@ -63,82 +75,114 @@ export class MainScene extends Phaser.Scene {
     this.createUI();
     this.createQuestionBox();
     this.createInteractHint();
+    this.setupKeyboardInput();
   }
 
-  private generateMap() {
-    const noise = this.createNoiseMap();
-    
+  private generateCityMap() {
+    // Initialize with grass
     for (let y = 0; y < MAP_HEIGHT; y++) {
       this.mapData[y] = [];
       for (let x = 0; x < MAP_WIDTH; x++) {
-        const value = noise[y][x];
-        
-        if (value < 0.25) {
-          this.mapData[y][x] = TERRAIN.WATER;
-        } else if (value < 0.35) {
-          this.mapData[y][x] = TERRAIN.SAND;
-        } else if (value < 0.65) {
-          this.mapData[y][x] = TERRAIN.GRASS;
-        } else if (value < 0.75) {
-          this.mapData[y][x] = TERRAIN.FLOWER;
-        } else {
-          this.mapData[y][x] = TERRAIN.DUNGEON;
-        }
+        this.mapData[y][x] = TERRAIN.GRASS;
+      }
+    }
 
-        if (x === Math.floor(MAP_WIDTH / 2) || y === Math.floor(MAP_HEIGHT / 2)) {
-          if (this.mapData[y][x] !== TERRAIN.WATER) {
-            this.mapData[y][x] = TERRAIN.PATH;
+    // Create main roads (grid pattern)
+    const roadSpacing = 12;
+    for (let i = 0; i < MAP_WIDTH; i++) {
+      for (let road = roadSpacing; road < MAP_WIDTH; road += roadSpacing) {
+        if (road < MAP_WIDTH) {
+          this.mapData[i][road] = TERRAIN.ROAD;
+          this.mapData[i][road + 1] = TERRAIN.ROAD;
+        }
+        if (road < MAP_HEIGHT && i < MAP_HEIGHT) {
+          this.mapData[road][i] = TERRAIN.ROAD;
+          this.mapData[road + 1][i] = TERRAIN.ROAD;
+        }
+      }
+    }
+
+    // Add crosswalks at intersections
+    for (let roadY = roadSpacing; roadY < MAP_HEIGHT; roadY += roadSpacing) {
+      for (let roadX = roadSpacing; roadX < MAP_WIDTH; roadX += roadSpacing) {
+        for (let dy = -1; dy <= 2; dy++) {
+          for (let dx = -1; dx <= 2; dx++) {
+            const y = roadY + dy;
+            const x = roadX + dx;
+            if (y >= 0 && y < MAP_HEIGHT && x >= 0 && x < MAP_WIDTH) {
+              this.mapData[y][x] = TERRAIN.CROSSWALK;
+            }
           }
         }
-
-        if (Math.random() < 0.02 && this.mapData[y][x] === TERRAIN.GRASS) {
-          this.mapData[y][x] = TERRAIN.STONE;
-        }
       }
     }
-  }
 
-  private createNoiseMap(): number[][] {
-    const noise: number[][] = [];
-    const scale = 0.08;
-    
+    // Add sidewalks next to roads
     for (let y = 0; y < MAP_HEIGHT; y++) {
-      noise[y] = [];
       for (let x = 0; x < MAP_WIDTH; x++) {
-        let value = 0;
-        let amplitude = 1;
-        let frequency = scale;
-        
-        for (let octave = 0; octave < 4; octave++) {
-          value += this.smoothNoise(x * frequency, y * frequency) * amplitude;
-          amplitude *= 0.5;
-          frequency *= 2;
+        if (this.mapData[y][x] === TERRAIN.ROAD || this.mapData[y][x] === TERRAIN.CROSSWALK) {
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const ny = y + dy;
+              const nx = x + dx;
+              if (ny >= 0 && ny < MAP_HEIGHT && nx >= 0 && nx < MAP_WIDTH) {
+                if (this.mapData[ny][nx] === TERRAIN.GRASS) {
+                  this.mapData[ny][nx] = TERRAIN.SIDEWALK;
+                }
+              }
+            }
+          }
         }
-        
-        noise[y][x] = (value + 1) / 2;
       }
     }
-    
-    return noise;
-  }
 
-  private smoothNoise(x: number, y: number): number {
-    const seedX = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
-    const seedY = Math.sin(x * 93.9898 + y * 67.345) * 24634.6345;
-    return Math.sin(seedX + seedY);
+    // Add building blocks
+    for (let blockY = 3; blockY < MAP_HEIGHT - 3; blockY += roadSpacing) {
+      for (let blockX = 3; blockX < MAP_WIDTH - 3; blockX += roadSpacing) {
+        // Create building footprints in each block
+        const buildingSize = Phaser.Math.Between(3, 5);
+        for (let by = 0; by < buildingSize; by++) {
+          for (let bx = 0; bx < buildingSize; bx++) {
+            const y = blockY + by;
+            const x = blockX + bx;
+            if (y < MAP_HEIGHT && x < MAP_WIDTH && this.mapData[y][x] === TERRAIN.GRASS) {
+              this.mapData[y][x] = TERRAIN.BUILDING;
+            }
+          }
+        }
+      }
+    }
+
+    // Add parks (larger green areas)
+    const parkLocations = [
+      { x: 20, y: 20 },
+      { x: 45, y: 35 },
+      { x: 8, y: 45 },
+    ];
+    
+    for (const park of parkLocations) {
+      for (let py = 0; py < 6; py++) {
+        for (let px = 0; px < 6; px++) {
+          const y = park.y + py;
+          const x = park.x + px;
+          if (y < MAP_HEIGHT && x < MAP_WIDTH && this.mapData[y][x] !== TERRAIN.ROAD) {
+            this.mapData[y][x] = TERRAIN.PARK;
+          }
+        }
+      }
+    }
   }
 
   private createTerrain() {
     this.terrainGraphics = this.add.graphics();
     
     const colors: Record<number, number> = {
+      [TERRAIN.ROAD]: 0x3d3d3d,
+      [TERRAIN.SIDEWALK]: 0xa0a0a0,
       [TERRAIN.GRASS]: 0x4a7c3c,
-      [TERRAIN.WATER]: 0x3d85c6,
-      [TERRAIN.SAND]: 0xd4a574,
-      [TERRAIN.DUNGEON]: 0x2a1a3d,
-      [TERRAIN.STONE]: 0x666666,
-      [TERRAIN.FLOWER]: 0x5c8a4c,
-      [TERRAIN.PATH]: 0x8b7355,
+      [TERRAIN.BUILDING]: 0x5a5a6a,
+      [TERRAIN.PARK]: 0x5c8a4c,
+      [TERRAIN.CROSSWALK]: 0x4d4d4d,
     };
 
     for (let y = 0; y < MAP_HEIGHT; y++) {
@@ -146,7 +190,7 @@ export class MainScene extends Phaser.Scene {
         const terrain = this.mapData[y][x];
         const color = colors[terrain];
         
-        const variation = Phaser.Math.Between(-10, 10);
+        const variation = Phaser.Math.Between(-8, 8);
         const r = ((color >> 16) & 0xFF) + variation;
         const g = ((color >> 8) & 0xFF) + variation;
         const b = (color & 0xFF) + variation;
@@ -157,22 +201,33 @@ export class MainScene extends Phaser.Scene {
         this.terrainGraphics.fillStyle(finalColor);
         this.terrainGraphics.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
 
-        if (terrain === TERRAIN.WATER) {
-          this.terrainGraphics.fillStyle(0x4d95d6, 0.3);
-          this.terrainGraphics.fillRect(x * TILE_SIZE + 4, y * TILE_SIZE + 4, 8, 4);
+        // Road markings
+        if (terrain === TERRAIN.ROAD) {
+          if ((x + y) % 4 === 0) {
+            this.terrainGraphics.fillStyle(0xffff00, 0.8);
+            this.terrainGraphics.fillRect(x * TILE_SIZE + 14, y * TILE_SIZE + 14, 4, 4);
+          }
         }
 
-        // Add dungeon floor pattern
-        if (terrain === TERRAIN.DUNGEON) {
-          this.terrainGraphics.fillStyle(0x3d2a5c, 0.5);
-          this.terrainGraphics.fillRect(x * TILE_SIZE + 2, y * TILE_SIZE + 2, 4, 4);
-          this.terrainGraphics.fillRect(x * TILE_SIZE + 26, y * TILE_SIZE + 26, 4, 4);
+        // Crosswalk stripes
+        if (terrain === TERRAIN.CROSSWALK) {
+          this.terrainGraphics.fillStyle(0xffffff, 0.9);
+          for (let stripe = 0; stripe < 4; stripe++) {
+            this.terrainGraphics.fillRect(x * TILE_SIZE + stripe * 8, y * TILE_SIZE + 2, 6, TILE_SIZE - 4);
+          }
+        }
+
+        // Sidewalk texture
+        if (terrain === TERRAIN.SIDEWALK) {
+          this.terrainGraphics.fillStyle(0x909090, 0.3);
+          this.terrainGraphics.fillRect(x * TILE_SIZE, y * TILE_SIZE, 1, TILE_SIZE);
+          this.terrainGraphics.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, 1);
         }
       }
     }
   }
 
-  private createDecorations() {
+  private createCityDecorations() {
     this.decorations = this.add.group();
 
     for (let y = 0; y < MAP_HEIGHT; y++) {
@@ -181,183 +236,220 @@ export class MainScene extends Phaser.Scene {
         const worldX = x * TILE_SIZE + TILE_SIZE / 2;
         const worldY = y * TILE_SIZE + TILE_SIZE / 2;
 
-        // Add dungeon decorations (skulls, torches)
-        if (terrain === TERRAIN.DUNGEON && Math.random() < 0.15) {
-          this.createDungeonDecor(worldX, worldY);
+        // Buildings
+        if (terrain === TERRAIN.BUILDING) {
+          this.createBuilding(worldX, worldY);
         }
 
-        if (terrain === TERRAIN.FLOWER && Math.random() < 0.5) {
-          this.createFlower(worldX, worldY);
+        // Park decorations
+        if (terrain === TERRAIN.PARK && Math.random() < 0.15) {
+          this.createParkDecor(worldX, worldY);
         }
 
-        if (terrain === TERRAIN.STONE) {
-          this.createRock(worldX, worldY);
-        }
-
-        if (terrain === TERRAIN.GRASS && Math.random() < 0.1) {
-          this.createGrassTuft(worldX, worldY);
+        // Street trees
+        if (terrain === TERRAIN.SIDEWALK && Math.random() < 0.03) {
+          this.createStreetTree(worldX, worldY);
         }
       }
     }
   }
 
-  private createDungeonDecor(x: number, y: number) {
+  private createBuilding(x: number, y: number) {
     const container = this.add.container(x, y);
+    const height = Phaser.Math.Between(40, 80);
+    const colors = [0x8b7355, 0x9a8b7a, 0x7a6b5a, 0xa08070, 0x6a5a4a];
+    const color = colors[Phaser.Math.Between(0, colors.length - 1)];
     
-    if (Math.random() < 0.5) {
-      // Skull
-      const skull = this.add.circle(0, 0, 8, 0xd4d4d4);
-      const leftEye = this.add.circle(-3, -2, 2, 0x1a1a1a);
-      const rightEye = this.add.circle(3, -2, 2, 0x1a1a1a);
-      const jaw = this.add.rectangle(0, 4, 8, 3, 0xb0b0b0);
-      container.add([skull, leftEye, rightEye, jaw]);
-    } else {
-      // Torch
-      const pole = this.add.rectangle(0, 4, 4, 16, 0x5c4033);
-      const flame1 = this.add.circle(0, -6, 6, 0xff6600);
-      const flame2 = this.add.circle(0, -8, 4, 0xffcc00);
-      container.add([pole, flame1, flame2]);
+    // Building body
+    const body = this.add.rectangle(0, -height / 2 + 16, 28, height, color);
+    body.setStrokeStyle(2, 0x3a3a3a);
+    
+    // Windows
+    const windowColor = Math.random() < 0.3 ? 0xffffaa : 0x87ceeb;
+    for (let wy = 0; wy < Math.floor(height / 16); wy++) {
+      for (let wx = -1; wx <= 1; wx += 2) {
+        const window = this.add.rectangle(wx * 8, -height + 20 + wy * 14, 5, 8, windowColor);
+        container.add(window);
+      }
     }
     
+    // Roof
+    const roof = this.add.rectangle(0, -height + 10, 32, 6, 0x4a4a4a);
+    
+    container.add([body, roof]);
+    container.setDepth(y + height);
+    this.decorations.add(container);
+  }
+
+  private createParkDecor(x: number, y: number) {
+    if (Math.random() < 0.5) {
+      // Tree
+      const trunk = this.add.rectangle(x, y + 8, 6, 16, 0x5d4037);
+      const leaves = this.add.circle(x, y - 8, 14, 0x2e7d32);
+      leaves.setDepth(y);
+      trunk.setDepth(y - 1);
+      this.decorations.add(trunk);
+      this.decorations.add(leaves);
+    } else {
+      // Flower bed
+      const colors = [0xff6b6b, 0xffd93d, 0xff85a2, 0x9b59b6];
+      for (let i = 0; i < 5; i++) {
+        const flower = this.add.circle(
+          x + Phaser.Math.Between(-8, 8),
+          y + Phaser.Math.Between(-8, 8),
+          3,
+          colors[Phaser.Math.Between(0, colors.length - 1)]
+        );
+        flower.setDepth(y);
+        this.decorations.add(flower);
+      }
+    }
+  }
+
+  private createStreetTree(x: number, y: number) {
+    const container = this.add.container(x, y);
+    const trunk = this.add.rectangle(0, 6, 4, 12, 0x5d4037);
+    const leaves = this.add.circle(0, -6, 10, 0x388e3c);
+    container.add([trunk, leaves]);
     container.setDepth(y);
     this.decorations.add(container);
   }
 
-  private createFlower(x: number, y: number) {
-    const colors = [0xff6b6b, 0xffd93d, 0x6bcb77, 0x4d96ff, 0xff85a2];
-    const color = colors[Phaser.Math.Between(0, colors.length - 1)];
-    
-    const flower = this.add.circle(x, y, 4, color);
-    const center = this.add.circle(x, y, 2, 0xffeb3b);
-    
-    this.decorations.add(flower);
-    this.decorations.add(center);
-  }
-
-  private createRock(x: number, y: number) {
-    const rock = this.add.ellipse(x, y, 
-      Phaser.Math.Between(12, 20), 
-      Phaser.Math.Between(8, 14), 
-      0x808080
-    );
-    
-    const highlight = this.add.ellipse(x - 2, y - 2, 6, 4, 0xa0a0a0);
-    
-    this.decorations.add(rock);
-    this.decorations.add(highlight);
-  }
-
-  private createGrassTuft(x: number, y: number) {
-    const graphics = this.add.graphics();
-    graphics.lineStyle(2, 0x5a8a4a);
-    
-    for (let i = 0; i < 3; i++) {
-      const offsetX = (i - 1) * 4;
-      graphics.beginPath();
-      graphics.moveTo(x + offsetX, y + 4);
-      graphics.lineTo(x + offsetX + (Math.random() - 0.5) * 4, y - 8);
-      graphics.strokePath();
-    }
-    
-    this.decorations.add(graphics);
-  }
-
   private createInteractiveObjects() {
-    // Place dustbins and traffic lights on grass/path areas
+    const objectTypes = ['mailbox', 'phone_booth', 'newspaper', 'trash_can', 'bench', 'atm', 'vending_machine', 'sign'];
+    let questionIndex = 0;
     let placedCount = 0;
-    const maxObjects = 30;
+    const maxObjects = 15;
 
-    for (let y = 10; y < MAP_HEIGHT - 10 && placedCount < maxObjects; y += 8) {
-      for (let x = 10; x < MAP_WIDTH - 10 && placedCount < maxObjects; x += 8) {
+    for (let y = 5; y < MAP_HEIGHT - 5 && placedCount < maxObjects; y += 6) {
+      for (let x = 5; x < MAP_WIDTH - 5 && placedCount < maxObjects; x += 6) {
         const terrain = this.mapData[y][x];
-        if ((terrain === TERRAIN.GRASS || terrain === TERRAIN.PATH) && Math.random() < 0.4) {
+        if ((terrain === TERRAIN.SIDEWALK || terrain === TERRAIN.PARK) && Math.random() < 0.5) {
           const worldX = x * TILE_SIZE + TILE_SIZE / 2;
           const worldY = y * TILE_SIZE + TILE_SIZE / 2;
+          const type = objectTypes[placedCount % objectTypes.length];
+          const question = CTF_QUESTIONS[questionIndex % CTF_QUESTIONS.length];
           
-          if (Math.random() < 0.5) {
-            this.createDustbin(worldX, worldY);
-          } else {
-            this.createTrafficLight(worldX, worldY);
-          }
+          this.createCityObject(worldX, worldY, type, question);
+          questionIndex++;
           placedCount++;
         }
       }
     }
   }
 
-  private createDustbin(x: number, y: number) {
+  private createCityObject(x: number, y: number, type: string, question: { q: string; a: string; hint: string; points: number }) {
     const container = this.add.container(x, y);
     
-    // Bin body
-    const body = this.add.rectangle(0, 4, 20, 28, 0x3d5a3d);
-    body.setStrokeStyle(2, 0x2a3d2a);
+    switch (type) {
+      case 'mailbox':
+        this.drawMailbox(container);
+        break;
+      case 'phone_booth':
+        this.drawPhoneBooth(container);
+        break;
+      case 'newspaper':
+        this.drawNewspaper(container);
+        break;
+      case 'trash_can':
+        this.drawTrashCan(container);
+        break;
+      case 'bench':
+        this.drawBench(container);
+        break;
+      case 'atm':
+        this.drawATM(container);
+        break;
+      case 'vending_machine':
+        this.drawVendingMachine(container);
+        break;
+      case 'sign':
+        this.drawSign(container);
+        break;
+    }
     
-    // Lid
-    const lid = this.add.rectangle(0, -10, 24, 6, 0x4a6b4a);
-    lid.setStrokeStyle(2, 0x2a3d2a);
+    // CTF flag indicator
+    const flag = this.add.text(0, -35, '🚩', { fontSize: '16px' }).setOrigin(0.5);
+    container.add(flag);
     
-    // Handle
-    const handle = this.add.rectangle(0, -14, 8, 3, 0x666666);
-    
-    // Question mark indicator
-    const questionMark = this.add.text(0, -24, '?', {
-      fontSize: '14px',
-      fontFamily: 'Arial',
-      color: '#ffcc00',
-      fontStyle: 'bold',
-    }).setOrigin(0.5);
-    
-    container.add([body, lid, handle, questionMark]);
     container.setDepth(y);
-    container.setSize(24, 36);
+    container.setSize(30, 40);
     container.setInteractive({ useHandCursor: true });
     
-    const question = QUESTIONS[Phaser.Math.Between(0, QUESTIONS.length - 1)];
+    const obj: InteractiveObject = { container, type, question, solved: false };
     
     container.on('pointerdown', () => {
-      this.showQuestion(question, 'dustbin');
+      if (!obj.solved) {
+        this.showQuestion(obj);
+      }
     });
     
-    this.interactiveObjects.push({ container, type: 'dustbin', question });
+    this.interactiveObjects.push(obj);
     this.decorations.add(container);
   }
 
-  private createTrafficLight(x: number, y: number) {
-    const container = this.add.container(x, y);
-    
-    // Pole
-    const pole = this.add.rectangle(0, 20, 6, 40, 0x444444);
-    
-    // Light box
-    const box = this.add.rectangle(0, -8, 16, 36, 0x333333);
-    box.setStrokeStyle(2, 0x222222);
-    
-    // Lights
-    const redLight = this.add.circle(0, -20, 5, 0xff3333);
-    const yellowLight = this.add.circle(0, -8, 5, 0xffcc00);
-    const greenLight = this.add.circle(0, 4, 5, 0x33cc33);
-    
-    // Question mark indicator
-    const questionMark = this.add.text(0, -40, '?', {
-      fontSize: '14px',
-      fontFamily: 'Arial',
-      color: '#ffcc00',
-      fontStyle: 'bold',
-    }).setOrigin(0.5);
-    
-    container.add([pole, box, redLight, yellowLight, greenLight, questionMark]);
-    container.setDepth(y);
-    container.setSize(20, 60);
-    container.setInteractive({ useHandCursor: true });
-    
-    const question = QUESTIONS[Phaser.Math.Between(0, QUESTIONS.length - 1)];
-    
-    container.on('pointerdown', () => {
-      this.showQuestion(question, 'traffic light');
-    });
-    
-    this.interactiveObjects.push({ container, type: 'traffic light', question });
-    this.decorations.add(container);
+  private drawMailbox(container: Phaser.GameObjects.Container) {
+    const post = this.add.rectangle(0, 10, 4, 20, 0x444444);
+    const box = this.add.rectangle(0, -4, 16, 20, 0x1e88e5);
+    box.setStrokeStyle(2, 0x1565c0);
+    const slot = this.add.rectangle(0, -2, 10, 2, 0x0d47a1);
+    container.add([post, box, slot]);
+  }
+
+  private drawPhoneBooth(container: Phaser.GameObjects.Container) {
+    const booth = this.add.rectangle(0, 0, 20, 40, 0xc62828);
+    booth.setStrokeStyle(2, 0x8e0000);
+    const window = this.add.rectangle(0, -5, 14, 20, 0x87ceeb);
+    const phone = this.add.circle(0, 10, 4, 0x333333);
+    container.add([booth, window, phone]);
+  }
+
+  private drawNewspaper(container: Phaser.GameObjects.Container) {
+    const stand = this.add.rectangle(0, 8, 20, 16, 0xff8f00);
+    stand.setStrokeStyle(2, 0xe65100);
+    const papers = this.add.rectangle(0, -2, 18, 8, 0xffffff);
+    const headline = this.add.rectangle(0, -2, 14, 2, 0x333333);
+    container.add([stand, papers, headline]);
+  }
+
+  private drawTrashCan(container: Phaser.GameObjects.Container) {
+    const can = this.add.rectangle(0, 4, 18, 24, 0x4caf50);
+    can.setStrokeStyle(2, 0x2e7d32);
+    const lid = this.add.rectangle(0, -10, 22, 4, 0x388e3c);
+    const recycle = this.add.text(0, 4, '♻', { fontSize: '12px' }).setOrigin(0.5);
+    container.add([can, lid, recycle]);
+  }
+
+  private drawBench(container: Phaser.GameObjects.Container) {
+    const seat = this.add.rectangle(0, 4, 30, 6, 0x795548);
+    const leg1 = this.add.rectangle(-10, 12, 4, 12, 0x5d4037);
+    const leg2 = this.add.rectangle(10, 12, 4, 12, 0x5d4037);
+    const back = this.add.rectangle(0, -6, 28, 4, 0x795548);
+    container.add([leg1, leg2, seat, back]);
+  }
+
+  private drawATM(container: Phaser.GameObjects.Container) {
+    const machine = this.add.rectangle(0, 0, 22, 36, 0x37474f);
+    machine.setStrokeStyle(2, 0x263238);
+    const screen = this.add.rectangle(0, -8, 16, 12, 0x4fc3f7);
+    const keypad = this.add.rectangle(0, 8, 14, 10, 0x607d8b);
+    container.add([machine, screen, keypad]);
+  }
+
+  private drawVendingMachine(container: Phaser.GameObjects.Container) {
+    const machine = this.add.rectangle(0, 0, 24, 40, 0xe53935);
+    machine.setStrokeStyle(2, 0xb71c1c);
+    const window = this.add.rectangle(0, -6, 18, 20, 0x263238);
+    const slot = this.add.rectangle(0, 14, 8, 4, 0x333333);
+    container.add([machine, window, slot]);
+  }
+
+  private drawSign(container: Phaser.GameObjects.Container) {
+    const post = this.add.rectangle(0, 12, 4, 24, 0x757575);
+    const sign = this.add.rectangle(0, -6, 24, 16, 0xffc107);
+    sign.setStrokeStyle(2, 0xffa000);
+    const text = this.add.text(0, -6, 'CTF', { fontSize: '10px', color: '#000', fontStyle: 'bold' }).setOrigin(0.5);
+    container.add([post, sign, text]);
   }
 
   private createQuestionBox() {
@@ -367,69 +459,186 @@ export class MainScene extends Phaser.Scene {
     this.questionBox.setVisible(false);
   }
 
-  private showQuestion(question: { q: string; a: string }, objectType: string) {
+  private showQuestion(obj: InteractiveObject) {
     if (this.isQuestionOpen) return;
     this.isQuestionOpen = true;
+    this.currentQuestion = obj;
+    this.answerInput = '';
     
     const centerX = this.cameras.main.width / 2;
     const centerY = this.cameras.main.height / 2;
     
-    // Clear previous content
     this.questionBox.removeAll(true);
     
-    // Background overlay
-    const overlay = this.add.rectangle(centerX, centerY, this.cameras.main.width, this.cameras.main.height, 0x000000, 0.7);
+    // Overlay
+    const overlay = this.add.rectangle(centerX, centerY, this.cameras.main.width, this.cameras.main.height, 0x000000, 0.8);
     overlay.setInteractive();
     
-    // Question box background
-    const boxBg = this.add.rectangle(centerX, centerY, 320, 200, 0x1a1a2e);
-    boxBg.setStrokeStyle(3, 0x4ecdc4);
+    // Question box
+    const boxBg = this.add.rectangle(centerX, centerY, 380, 280, 0x1a1a2e);
+    boxBg.setStrokeStyle(3, 0x00ff88);
     
-    // Title
-    const title = this.add.text(centerX, centerY - 70, `📦 ${objectType.toUpperCase()}`, {
+    // Header
+    const header = this.add.rectangle(centerX, centerY - 115, 380, 40, 0x00ff88);
+    const headerText = this.add.text(centerX, centerY - 115, `🚩 CTF CHALLENGE [${obj.question.points} pts]`, {
       fontSize: '14px',
       fontFamily: '"Press Start 2P"',
-      color: '#4ecdc4',
+      color: '#1a1a2e',
     }).setOrigin(0.5);
     
-    // Question text
-    const questionText = this.add.text(centerX, centerY - 20, question.q, {
+    // Category/hint
+    const hintText = this.add.text(centerX, centerY - 75, `Category: ${obj.question.hint}`, {
+      fontSize: '12px',
+      fontFamily: 'Arial',
+      color: '#00ff88',
+    }).setOrigin(0.5);
+    
+    // Question
+    const questionText = this.add.text(centerX, centerY - 30, obj.question.q, {
       fontSize: '16px',
       fontFamily: 'Arial',
       color: '#ffffff',
-      wordWrap: { width: 280 },
+      wordWrap: { width: 340 },
       align: 'center',
     }).setOrigin(0.5);
     
-    // Answer text
-    const answerText = this.add.text(centerX, centerY + 30, `Answer: ${question.a}`, {
+    // Answer input box
+    const inputBg = this.add.rectangle(centerX, centerY + 30, 320, 36, 0x2a2a4e);
+    inputBg.setStrokeStyle(2, 0x00ff88);
+    
+    this.inputText = this.add.text(centerX - 150, centerY + 30, '> Type your answer...', {
       fontSize: '14px',
-      fontFamily: 'Arial',
-      color: '#ffd93d',
-    }).setOrigin(0.5);
+      fontFamily: 'Courier New',
+      color: '#888888',
+    }).setOrigin(0, 0.5);
     
-    // Close button
-    const closeBtn = this.add.rectangle(centerX, centerY + 70, 100, 30, 0x4ecdc4);
-    closeBtn.setInteractive({ useHandCursor: true });
-    
-    const closeText = this.add.text(centerX, centerY + 70, 'CLOSE', {
+    // Submit button
+    const submitBtn = this.add.rectangle(centerX - 60, centerY + 85, 100, 36, 0x00ff88);
+    submitBtn.setInteractive({ useHandCursor: true });
+    const submitText = this.add.text(centerX - 60, centerY + 85, 'SUBMIT', {
       fontSize: '12px',
       fontFamily: '"Press Start 2P"',
       color: '#1a1a2e',
     }).setOrigin(0.5);
     
-    closeBtn.on('pointerover', () => closeBtn.setFillStyle(0x6ee0d8));
-    closeBtn.on('pointerout', () => closeBtn.setFillStyle(0x4ecdc4));
-    closeBtn.on('pointerdown', () => this.hideQuestion());
-    overlay.on('pointerdown', () => this.hideQuestion());
+    submitBtn.on('pointerover', () => submitBtn.setFillStyle(0x44ffaa));
+    submitBtn.on('pointerout', () => submitBtn.setFillStyle(0x00ff88));
+    submitBtn.on('pointerdown', () => this.submitAnswer());
     
-    this.questionBox.add([overlay, boxBg, title, questionText, answerText, closeBtn, closeText]);
+    // Close button
+    const closeBtn = this.add.rectangle(centerX + 60, centerY + 85, 100, 36, 0xff4444);
+    closeBtn.setInteractive({ useHandCursor: true });
+    const closeText = this.add.text(centerX + 60, centerY + 85, 'CLOSE', {
+      fontSize: '12px',
+      fontFamily: '"Press Start 2P"',
+      color: '#ffffff',
+    }).setOrigin(0.5);
+    
+    closeBtn.on('pointerover', () => closeBtn.setFillStyle(0xff6666));
+    closeBtn.on('pointerout', () => closeBtn.setFillStyle(0xff4444));
+    closeBtn.on('pointerdown', () => this.hideQuestion());
+    
+    // Instructions
+    const instructions = this.add.text(centerX, centerY + 120, 'Type your answer and press SUBMIT or ENTER', {
+      fontSize: '10px',
+      fontFamily: 'Arial',
+      color: '#666666',
+    }).setOrigin(0.5);
+    
+    this.questionBox.add([overlay, boxBg, header, headerText, hintText, questionText, inputBg, this.inputText, submitBtn, submitText, closeBtn, closeText, instructions]);
     this.questionBox.setVisible(true);
+  }
+
+  private setupKeyboardInput() {
+    this.input.keyboard!.on('keydown', (event: KeyboardEvent) => {
+      if (!this.isQuestionOpen) return;
+      
+      if (event.key === 'Enter') {
+        this.submitAnswer();
+      } else if (event.key === 'Escape') {
+        this.hideQuestion();
+      } else if (event.key === 'Backspace') {
+        this.answerInput = this.answerInput.slice(0, -1);
+        this.updateInputDisplay();
+      } else if (event.key.length === 1 && this.answerInput.length < 50) {
+        this.answerInput += event.key;
+        this.updateInputDisplay();
+      }
+    });
+  }
+
+  private updateInputDisplay() {
+    if (this.inputText) {
+      this.inputText.setText(this.answerInput.length > 0 ? `> ${this.answerInput}_` : '> Type your answer...');
+      this.inputText.setColor(this.answerInput.length > 0 ? '#00ff88' : '#888888');
+    }
+  }
+
+  private submitAnswer() {
+    if (!this.currentQuestion || this.answerInput.trim() === '') return;
+    
+    const correct = this.answerInput.toLowerCase().trim() === this.currentQuestion.question.a.toLowerCase();
+    
+    if (correct) {
+      this.score += this.currentQuestion.question.points;
+      this.currentQuestion.solved = true;
+      this.scoreText.setText(`SCORE: ${this.score}`);
+      
+      // Mark as solved visually
+      const flag = this.currentQuestion.container.list.find((obj) => obj instanceof Phaser.GameObjects.Text) as Phaser.GameObjects.Text;
+      if (flag) {
+        flag.setText('✅');
+      }
+      
+      this.showResult(true, this.currentQuestion.question.points);
+    } else {
+      this.showResult(false, 0);
+    }
+  }
+
+  private showResult(correct: boolean, points: number) {
+    const centerX = this.cameras.main.width / 2;
+    const centerY = this.cameras.main.height / 2;
+    
+    const resultBg = this.add.rectangle(centerX, centerY, 300, 100, correct ? 0x00aa00 : 0xaa0000);
+    resultBg.setStrokeStyle(3, correct ? 0x00ff00 : 0xff0000);
+    resultBg.setScrollFactor(0);
+    resultBg.setDepth(4000);
+    
+    const resultText = this.add.text(centerX, centerY - 15, correct ? '🎉 CORRECT!' : '❌ WRONG!', {
+      fontSize: '18px',
+      fontFamily: '"Press Start 2P"',
+      color: '#ffffff',
+    }).setOrigin(0.5);
+    resultText.setScrollFactor(0);
+    resultText.setDepth(4000);
+    
+    const subText = this.add.text(centerX, centerY + 20, correct ? `+${points} points` : 'Try again!', {
+      fontSize: '14px',
+      fontFamily: 'Arial',
+      color: '#ffffff',
+    }).setOrigin(0.5);
+    subText.setScrollFactor(0);
+    subText.setDepth(4000);
+    
+    this.time.delayedCall(1500, () => {
+      resultBg.destroy();
+      resultText.destroy();
+      subText.destroy();
+      if (correct) {
+        this.hideQuestion();
+      } else {
+        this.answerInput = '';
+        this.updateInputDisplay();
+      }
+    });
   }
 
   private hideQuestion() {
     this.questionBox.setVisible(false);
     this.isQuestionOpen = false;
+    this.currentQuestion = null;
+    this.answerInput = '';
   }
 
   private createInteractHint() {
@@ -438,20 +647,21 @@ export class MainScene extends Phaser.Scene {
     this.interactHint.setDepth(2500);
     this.interactHint.setVisible(false);
     
-    const hintBg = this.add.rectangle(0, 0, 140, 24, 0x000000, 0.7);
-    const hintText = this.add.text(0, 0, 'Click to interact!', {
-      fontSize: '10px',
+    const hintBg = this.add.rectangle(0, 0, 180, 28, 0x000000, 0.8);
+    hintBg.setStrokeStyle(1, 0x00ff88);
+    const hintText = this.add.text(0, 0, '🚩 Click to solve CTF!', {
+      fontSize: '11px',
       fontFamily: 'Arial',
-      color: '#ffcc00',
+      color: '#00ff88',
     }).setOrigin(0.5);
     
     this.interactHint.add([hintBg, hintText]);
-    this.interactHint.setPosition(this.cameras.main.width / 2, this.cameras.main.height - 60);
+    this.interactHint.setPosition(this.cameras.main.width / 2, this.cameras.main.height - 50);
   }
 
   private createPlayer() {
-    const startX = (MAP_WIDTH / 2) * TILE_SIZE;
-    const startY = (MAP_HEIGHT / 2) * TILE_SIZE;
+    const startX = 14 * TILE_SIZE;
+    const startY = 14 * TILE_SIZE;
     
     this.player = this.add.container(startX, startY);
     
@@ -504,10 +714,20 @@ export class MainScene extends Phaser.Scene {
     });
     this.positionText.setScrollFactor(0);
     this.positionText.setDepth(2000);
+
+    this.scoreText = this.add.text(16, 45, 'SCORE: 0', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '12px',
+      color: '#00ff88',
+      backgroundColor: '#00000080',
+      padding: { x: 8, y: 6 },
+    });
+    this.scoreText.setScrollFactor(0);
+    this.scoreText.setDepth(2000);
   }
 
   update() {
-    if (this.isQuestionOpen) return; // Pause movement when question is open
+    if (this.isQuestionOpen) return;
     
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     let velocityX = 0;
@@ -535,14 +755,6 @@ export class MainScene extends Phaser.Scene {
 
     const tileX = Math.floor(this.player.x / TILE_SIZE);
     const tileY = Math.floor(this.player.y / TILE_SIZE);
-    
-    if (tileX >= 0 && tileX < MAP_WIDTH && tileY >= 0 && tileY < MAP_HEIGHT) {
-      if (this.mapData[tileY][tileX] === TERRAIN.WATER) {
-        body.velocity.x *= 0.5;
-        body.velocity.y *= 0.5;
-      }
-    }
-
     this.positionText.setText(`X: ${tileX} Y: ${tileY}`);
 
     if (velocityX !== 0 || velocityY !== 0) {
@@ -551,9 +763,10 @@ export class MainScene extends Phaser.Scene {
       this.playerBody.y = 0;
     }
 
-    // Check proximity to interactive objects
+    // Check proximity to unsolved interactive objects
     let nearObject = false;
     for (const obj of this.interactiveObjects) {
+      if (obj.solved) continue;
       const dist = Phaser.Math.Distance.Between(
         this.player.x, this.player.y,
         obj.container.x, obj.container.y
