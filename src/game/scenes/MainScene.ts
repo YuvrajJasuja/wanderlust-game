@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 
 const TILE_SIZE = 32;
-const MAP_WIDTH = 60;
-const MAP_HEIGHT = 60;
+const MAP_WIDTH = 120;
+const MAP_HEIGHT = 120;
 const PLAYER_SPEED = 400;
 
 // City terrain types
@@ -32,6 +32,11 @@ const CTF_QUESTIONS = [
   { q: "What does API stand for?", a: "application programming interface", hint: "Development", points: 15 },
   { q: "What is ROT13 of 'hello'?", a: "uryyb", hint: "Cipher", points: 25 },
   { q: "What file extension do Python scripts use?", a: "py", hint: "Programming", points: 10 },
+  { q: "What does DNS stand for?", a: "domain name system", hint: "Networking", points: 15 },
+  { q: "What is the default MySQL port?", a: "3306", hint: "Databases", points: 20 },
+  { q: "What does RAM stand for?", a: "random access memory", hint: "Hardware", points: 10 },
+  { q: "What is 0b1010 in decimal?", a: "10", hint: "Binary", points: 15 },
+  { q: "What hash algorithm produces 128-bit digest?", a: "md5", hint: "Cryptography", points: 25 },
 ];
 
 interface InteractiveObject {
@@ -39,6 +44,11 @@ interface InteractiveObject {
   type: string;
   question: { q: string; a: string; hint: string; points: number };
   solved: boolean;
+}
+
+interface Car {
+  container: Phaser.GameObjects.Container;
+  body: Phaser.Physics.Arcade.Body;
 }
 
 export class MainScene extends Phaser.Scene {
@@ -59,6 +69,10 @@ export class MainScene extends Phaser.Scene {
   private answerInput = '';
   private score = 0;
   private inputText!: Phaser.GameObjects.Text;
+  private buildingBodies: Phaser.Physics.Arcade.StaticGroup | null = null;
+  private carBodies: Phaser.Physics.Arcade.StaticGroup | null = null;
+  private cars: Car[] = [];
+  private htmlInput: HTMLInputElement | null = null;
 
   constructor() {
     super({ key: 'MainScene' });
@@ -67,15 +81,17 @@ export class MainScene extends Phaser.Scene {
   create() {
     this.generateCityMap();
     this.createTerrain();
+    this.createBuildingColliders();
     this.createCityDecorations();
+    this.createCars();
     this.createInteractiveObjects();
     this.createPlayer();
+    this.setupCollisions();
     this.setupCamera();
     this.setupControls();
     this.createUI();
     this.createQuestionBox();
     this.createInteractHint();
-    this.setupKeyboardInput();
   }
 
   private generateCityMap() {
@@ -88,16 +104,18 @@ export class MainScene extends Phaser.Scene {
     }
 
     // Create main roads (grid pattern)
-    const roadSpacing = 12;
+    const roadSpacing = 15;
     for (let i = 0; i < MAP_WIDTH; i++) {
       for (let road = roadSpacing; road < MAP_WIDTH; road += roadSpacing) {
         if (road < MAP_WIDTH) {
           this.mapData[i][road] = TERRAIN.ROAD;
           this.mapData[i][road + 1] = TERRAIN.ROAD;
+          if (road + 2 < MAP_WIDTH) this.mapData[i][road + 2] = TERRAIN.ROAD;
         }
         if (road < MAP_HEIGHT && i < MAP_HEIGHT) {
           this.mapData[road][i] = TERRAIN.ROAD;
           this.mapData[road + 1][i] = TERRAIN.ROAD;
+          if (road + 2 < MAP_HEIGHT) this.mapData[road + 2][i] = TERRAIN.ROAD;
         }
       }
     }
@@ -105,8 +123,8 @@ export class MainScene extends Phaser.Scene {
     // Add crosswalks at intersections
     for (let roadY = roadSpacing; roadY < MAP_HEIGHT; roadY += roadSpacing) {
       for (let roadX = roadSpacing; roadX < MAP_WIDTH; roadX += roadSpacing) {
-        for (let dy = -1; dy <= 2; dy++) {
-          for (let dx = -1; dx <= 2; dx++) {
+        for (let dy = -1; dy <= 3; dy++) {
+          for (let dx = -1; dx <= 3; dx++) {
             const y = roadY + dy;
             const x = roadX + dx;
             if (y >= 0 && y < MAP_HEIGHT && x >= 0 && x < MAP_WIDTH) {
@@ -140,7 +158,7 @@ export class MainScene extends Phaser.Scene {
     for (let blockY = 3; blockY < MAP_HEIGHT - 3; blockY += roadSpacing) {
       for (let blockX = 3; blockX < MAP_WIDTH - 3; blockX += roadSpacing) {
         // Create building footprints in each block
-        const buildingSize = Phaser.Math.Between(3, 5);
+        const buildingSize = Phaser.Math.Between(4, 7);
         for (let by = 0; by < buildingSize; by++) {
           for (let bx = 0; bx < buildingSize; bx++) {
             const y = blockY + by;
@@ -155,14 +173,16 @@ export class MainScene extends Phaser.Scene {
 
     // Add parks (larger green areas)
     const parkLocations = [
-      { x: 20, y: 20 },
-      { x: 45, y: 35 },
-      { x: 8, y: 45 },
+      { x: 25, y: 25 },
+      { x: 70, y: 45 },
+      { x: 15, y: 80 },
+      { x: 90, y: 25 },
+      { x: 55, y: 90 },
     ];
     
     for (const park of parkLocations) {
-      for (let py = 0; py < 6; py++) {
-        for (let px = 0; px < 6; px++) {
+      for (let py = 0; py < 8; py++) {
+        for (let px = 0; px < 8; px++) {
           const y = park.y + py;
           const x = park.x + px;
           if (y < MAP_HEIGHT && x < MAP_WIDTH && this.mapData[y][x] !== TERRAIN.ROAD) {
@@ -227,6 +247,63 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
+  private createBuildingColliders() {
+    this.buildingBodies = this.physics.add.staticGroup();
+    
+    // Track which building tiles we've already processed
+    const processed: boolean[][] = [];
+    for (let y = 0; y < MAP_HEIGHT; y++) {
+      processed[y] = [];
+      for (let x = 0; x < MAP_WIDTH; x++) {
+        processed[y][x] = false;
+      }
+    }
+
+    // Find building clusters and create colliders
+    for (let y = 0; y < MAP_HEIGHT; y++) {
+      for (let x = 0; x < MAP_WIDTH; x++) {
+        if (this.mapData[y][x] === TERRAIN.BUILDING && !processed[y][x]) {
+          // Find the extent of this building
+          let maxX = x;
+          let maxY = y;
+          
+          // Find width
+          while (maxX + 1 < MAP_WIDTH && this.mapData[y][maxX + 1] === TERRAIN.BUILDING && !processed[y][maxX + 1]) {
+            maxX++;
+          }
+          
+          // Find height
+          let validRow = true;
+          while (validRow && maxY + 1 < MAP_HEIGHT) {
+            for (let checkX = x; checkX <= maxX; checkX++) {
+              if (this.mapData[maxY + 1][checkX] !== TERRAIN.BUILDING || processed[maxY + 1][checkX]) {
+                validRow = false;
+                break;
+              }
+            }
+            if (validRow) maxY++;
+          }
+          
+          // Mark as processed
+          for (let py = y; py <= maxY; py++) {
+            for (let px = x; px <= maxX; px++) {
+              processed[py][px] = true;
+            }
+          }
+          
+          // Create collider for this building
+          const width = (maxX - x + 1) * TILE_SIZE;
+          const height = (maxY - y + 1) * TILE_SIZE;
+          const centerX = x * TILE_SIZE + width / 2;
+          const centerY = y * TILE_SIZE + height / 2;
+          
+          const collider = this.add.rectangle(centerX, centerY, width, height, 0x000000, 0);
+          this.buildingBodies.add(collider);
+        }
+      }
+    }
+  }
+
   private createCityDecorations() {
     this.decorations = this.add.group();
 
@@ -236,28 +313,101 @@ export class MainScene extends Phaser.Scene {
         const worldX = x * TILE_SIZE + TILE_SIZE / 2;
         const worldY = y * TILE_SIZE + TILE_SIZE / 2;
 
-        // Buildings
+        // Buildings (visual only - collision handled separately)
         if (terrain === TERRAIN.BUILDING) {
           this.createBuilding(worldX, worldY);
         }
 
         // Park decorations
-        if (terrain === TERRAIN.PARK && Math.random() < 0.15) {
+        if (terrain === TERRAIN.PARK && Math.random() < 0.12) {
           this.createParkDecor(worldX, worldY);
         }
 
         // Street trees
-        if (terrain === TERRAIN.SIDEWALK && Math.random() < 0.03) {
+        if (terrain === TERRAIN.SIDEWALK && Math.random() < 0.02) {
           this.createStreetTree(worldX, worldY);
         }
       }
     }
   }
 
+  private createCars() {
+    this.carBodies = this.physics.add.staticGroup();
+    const carColors = [0xe53935, 0x1e88e5, 0x43a047, 0xfdd835, 0x8e24aa, 0xff6f00, 0x00897b];
+    let carCount = 0;
+    const maxCars = 40;
+
+    for (let y = 0; y < MAP_HEIGHT && carCount < maxCars; y++) {
+      for (let x = 0; x < MAP_WIDTH && carCount < maxCars; x++) {
+        if (this.mapData[y][x] === TERRAIN.ROAD && Math.random() < 0.015) {
+          // Check if there's space for a car
+          const worldX = x * TILE_SIZE + TILE_SIZE / 2;
+          const worldY = y * TILE_SIZE + TILE_SIZE / 2;
+          
+          // Determine car orientation based on road direction
+          const isHorizontalRoad = y > 0 && y < MAP_HEIGHT - 1 && 
+            (this.mapData[y - 1][x] === TERRAIN.SIDEWALK || this.mapData[y + 1][x] === TERRAIN.SIDEWALK);
+          
+          const container = this.add.container(worldX, worldY);
+          const carColor = carColors[Phaser.Math.Between(0, carColors.length - 1)];
+          
+          if (isHorizontalRoad) {
+            // Horizontal car
+            const body = this.add.rectangle(0, 0, 48, 24, carColor);
+            body.setStrokeStyle(2, 0x1a1a1a);
+            const roof = this.add.rectangle(0, 0, 24, 18, this.darkenColor(carColor, 30));
+            const frontLight = this.add.rectangle(22, -6, 4, 6, 0xffffaa);
+            const frontLight2 = this.add.rectangle(22, 6, 4, 6, 0xffffaa);
+            const rearLight = this.add.rectangle(-22, -6, 4, 6, 0xff3333);
+            const rearLight2 = this.add.rectangle(-22, 6, 4, 6, 0xff3333);
+            const wheel1 = this.add.rectangle(-14, -12, 10, 6, 0x1a1a1a);
+            const wheel2 = this.add.rectangle(14, -12, 10, 6, 0x1a1a1a);
+            const wheel3 = this.add.rectangle(-14, 12, 10, 6, 0x1a1a1a);
+            const wheel4 = this.add.rectangle(14, 12, 10, 6, 0x1a1a1a);
+            container.add([wheel1, wheel2, wheel3, wheel4, body, roof, frontLight, frontLight2, rearLight, rearLight2]);
+            
+            // Create collider
+            const collider = this.add.rectangle(worldX, worldY, 48, 24, 0x000000, 0);
+            this.carBodies.add(collider);
+          } else {
+            // Vertical car
+            const body = this.add.rectangle(0, 0, 24, 48, carColor);
+            body.setStrokeStyle(2, 0x1a1a1a);
+            const roof = this.add.rectangle(0, 0, 18, 24, this.darkenColor(carColor, 30));
+            const frontLight = this.add.rectangle(-6, -22, 6, 4, 0xffffaa);
+            const frontLight2 = this.add.rectangle(6, -22, 6, 4, 0xffffaa);
+            const rearLight = this.add.rectangle(-6, 22, 6, 4, 0xff3333);
+            const rearLight2 = this.add.rectangle(6, 22, 6, 4, 0xff3333);
+            const wheel1 = this.add.rectangle(-12, -14, 6, 10, 0x1a1a1a);
+            const wheel2 = this.add.rectangle(-12, 14, 6, 10, 0x1a1a1a);
+            const wheel3 = this.add.rectangle(12, -14, 6, 10, 0x1a1a1a);
+            const wheel4 = this.add.rectangle(12, 14, 6, 10, 0x1a1a1a);
+            container.add([wheel1, wheel2, wheel3, wheel4, body, roof, frontLight, frontLight2, rearLight, rearLight2]);
+            
+            // Create collider
+            const collider = this.add.rectangle(worldX, worldY, 24, 48, 0x000000, 0);
+            this.carBodies.add(collider);
+          }
+          
+          container.setDepth(worldY);
+          this.decorations.add(container);
+          carCount++;
+        }
+      }
+    }
+  }
+
+  private darkenColor(color: number, amount: number): number {
+    const r = Math.max(0, ((color >> 16) & 0xFF) - amount);
+    const g = Math.max(0, ((color >> 8) & 0xFF) - amount);
+    const b = Math.max(0, (color & 0xFF) - amount);
+    return (r << 16) | (g << 8) | b;
+  }
+
   private createBuilding(x: number, y: number) {
     const container = this.add.container(x, y);
-    const height = Phaser.Math.Between(40, 80);
-    const colors = [0x8b7355, 0x9a8b7a, 0x7a6b5a, 0xa08070, 0x6a5a4a];
+    const height = Phaser.Math.Between(50, 100);
+    const colors = [0x8b7355, 0x9a8b7a, 0x7a6b5a, 0xa08070, 0x6a5a4a, 0x5a6a7a, 0x7a5a6a];
     const color = colors[Phaser.Math.Between(0, colors.length - 1)];
     
     // Building body
@@ -319,12 +469,12 @@ export class MainScene extends Phaser.Scene {
     const objectTypes = ['mailbox', 'phone_booth', 'newspaper', 'trash_can', 'bench', 'atm', 'vending_machine', 'sign'];
     let questionIndex = 0;
     let placedCount = 0;
-    const maxObjects = 15;
+    const maxObjects = 30;
 
-    for (let y = 5; y < MAP_HEIGHT - 5 && placedCount < maxObjects; y += 6) {
-      for (let x = 5; x < MAP_WIDTH - 5 && placedCount < maxObjects; x += 6) {
+    for (let y = 5; y < MAP_HEIGHT - 5 && placedCount < maxObjects; y += 8) {
+      for (let x = 5; x < MAP_WIDTH - 5 && placedCount < maxObjects; x += 8) {
         const terrain = this.mapData[y][x];
-        if ((terrain === TERRAIN.SIDEWALK || terrain === TERRAIN.PARK) && Math.random() < 0.5) {
+        if ((terrain === TERRAIN.SIDEWALK || terrain === TERRAIN.PARK) && Math.random() < 0.4) {
           const worldX = x * TILE_SIZE + TILE_SIZE / 2;
           const worldY = y * TILE_SIZE + TILE_SIZE / 2;
           const type = objectTypes[placedCount % objectTypes.length];
@@ -470,31 +620,37 @@ export class MainScene extends Phaser.Scene {
     
     this.questionBox.removeAll(true);
     
+    // Remove existing HTML input if any
+    this.removeHtmlInput();
+    
     // Overlay
     const overlay = this.add.rectangle(centerX, centerY, this.cameras.main.width, this.cameras.main.height, 0x000000, 0.8);
     overlay.setInteractive();
+    overlay.on('pointerdown', (pointer: Phaser.Input.Pointer, localX: number, localY: number, event: Phaser.Types.Input.EventData) => {
+      event.stopPropagation();
+    });
     
     // Question box
-    const boxBg = this.add.rectangle(centerX, centerY, 380, 280, 0x1a1a2e);
+    const boxBg = this.add.rectangle(centerX, centerY, 380, 300, 0x1a1a2e);
     boxBg.setStrokeStyle(3, 0x00ff88);
     
     // Header
-    const header = this.add.rectangle(centerX, centerY - 115, 380, 40, 0x00ff88);
-    const headerText = this.add.text(centerX, centerY - 115, `🚩 CTF CHALLENGE [${obj.question.points} pts]`, {
+    const header = this.add.rectangle(centerX, centerY - 125, 380, 40, 0x00ff88);
+    const headerText = this.add.text(centerX, centerY - 125, `🚩 CTF CHALLENGE [${obj.question.points} pts]`, {
       fontSize: '14px',
       fontFamily: '"Press Start 2P"',
       color: '#1a1a2e',
     }).setOrigin(0.5);
     
     // Category/hint
-    const hintText = this.add.text(centerX, centerY - 75, `Category: ${obj.question.hint}`, {
+    const hintText = this.add.text(centerX, centerY - 85, `Category: ${obj.question.hint}`, {
       fontSize: '12px',
       fontFamily: 'Arial',
       color: '#00ff88',
     }).setOrigin(0.5);
     
     // Question
-    const questionText = this.add.text(centerX, centerY - 30, obj.question.q, {
+    const questionText = this.add.text(centerX, centerY - 40, obj.question.q, {
       fontSize: '16px',
       fontFamily: 'Arial',
       color: '#ffffff',
@@ -502,20 +658,23 @@ export class MainScene extends Phaser.Scene {
       align: 'center',
     }).setOrigin(0.5);
     
-    // Answer input box
-    const inputBg = this.add.rectangle(centerX, centerY + 30, 320, 36, 0x2a2a4e);
+    // Input display (visual only)
+    const inputBg = this.add.rectangle(centerX, centerY + 25, 320, 40, 0x2a2a4e);
     inputBg.setStrokeStyle(2, 0x00ff88);
     
-    this.inputText = this.add.text(centerX - 150, centerY + 30, '> Type your answer...', {
+    this.inputText = this.add.text(centerX, centerY + 25, '> Click here to type...', {
       fontSize: '14px',
       fontFamily: 'Courier New',
       color: '#888888',
-    }).setOrigin(0, 0.5);
+    }).setOrigin(0.5);
+    
+    // Create HTML input for actual typing
+    this.createHtmlInput(centerX, centerY + 25);
     
     // Submit button
-    const submitBtn = this.add.rectangle(centerX - 60, centerY + 85, 100, 36, 0x00ff88);
+    const submitBtn = this.add.rectangle(centerX - 70, centerY + 85, 110, 40, 0x00ff88);
     submitBtn.setInteractive({ useHandCursor: true });
-    const submitText = this.add.text(centerX - 60, centerY + 85, 'SUBMIT', {
+    const submitText = this.add.text(centerX - 70, centerY + 85, 'SUBMIT', {
       fontSize: '12px',
       fontFamily: '"Press Start 2P"',
       color: '#1a1a2e',
@@ -523,12 +682,15 @@ export class MainScene extends Phaser.Scene {
     
     submitBtn.on('pointerover', () => submitBtn.setFillStyle(0x44ffaa));
     submitBtn.on('pointerout', () => submitBtn.setFillStyle(0x00ff88));
-    submitBtn.on('pointerdown', () => this.submitAnswer());
+    submitBtn.on('pointerdown', (pointer: Phaser.Input.Pointer, localX: number, localY: number, event: Phaser.Types.Input.EventData) => {
+      event.stopPropagation();
+      this.submitAnswer();
+    });
     
     // Close button
-    const closeBtn = this.add.rectangle(centerX + 60, centerY + 85, 100, 36, 0xff4444);
+    const closeBtn = this.add.rectangle(centerX + 70, centerY + 85, 110, 40, 0xff4444);
     closeBtn.setInteractive({ useHandCursor: true });
-    const closeText = this.add.text(centerX + 60, centerY + 85, 'CLOSE', {
+    const closeText = this.add.text(centerX + 70, centerY + 85, 'CLOSE', {
       fontSize: '12px',
       fontFamily: '"Press Start 2P"',
       color: '#ffffff',
@@ -536,10 +698,13 @@ export class MainScene extends Phaser.Scene {
     
     closeBtn.on('pointerover', () => closeBtn.setFillStyle(0xff6666));
     closeBtn.on('pointerout', () => closeBtn.setFillStyle(0xff4444));
-    closeBtn.on('pointerdown', () => this.hideQuestion());
+    closeBtn.on('pointerdown', (pointer: Phaser.Input.Pointer, localX: number, localY: number, event: Phaser.Types.Input.EventData) => {
+      event.stopPropagation();
+      this.hideQuestion();
+    });
     
     // Instructions
-    const instructions = this.add.text(centerX, centerY + 120, 'Type your answer and press SUBMIT or ENTER', {
+    const instructions = this.add.text(centerX, centerY + 130, 'Type your answer and press SUBMIT or ENTER', {
       fontSize: '10px',
       fontFamily: 'Arial',
       color: '#666666',
@@ -549,22 +714,72 @@ export class MainScene extends Phaser.Scene {
     this.questionBox.setVisible(true);
   }
 
-  private setupKeyboardInput() {
-    this.input.keyboard!.on('keydown', (event: KeyboardEvent) => {
-      if (!this.isQuestionOpen) return;
-      
-      if (event.key === 'Enter') {
-        this.submitAnswer();
-      } else if (event.key === 'Escape') {
-        this.hideQuestion();
-      } else if (event.key === 'Backspace') {
-        this.answerInput = this.answerInput.slice(0, -1);
-        this.updateInputDisplay();
-      } else if (event.key.length === 1 && this.answerInput.length < 50) {
-        this.answerInput += event.key;
+  private createHtmlInput(x: number, y: number) {
+    const canvas = this.game.canvas;
+    const canvasRect = canvas.getBoundingClientRect();
+    
+    // Calculate position relative to canvas
+    const scaleX = canvasRect.width / canvas.width;
+    const scaleY = canvasRect.height / canvas.height;
+    
+    const inputX = canvasRect.left + (x - 160) * scaleX;
+    const inputY = canvasRect.top + (y - 20) * scaleY;
+    const inputWidth = 320 * scaleX;
+    const inputHeight = 40 * scaleY;
+    
+    this.htmlInput = document.createElement('input');
+    this.htmlInput.type = 'text';
+    this.htmlInput.placeholder = 'Type your answer here...';
+    this.htmlInput.style.cssText = `
+      position: fixed;
+      left: ${inputX}px;
+      top: ${inputY}px;
+      width: ${inputWidth}px;
+      height: ${inputHeight}px;
+      font-size: 14px;
+      font-family: 'Courier New', monospace;
+      background: rgba(42, 42, 78, 0.95);
+      border: 2px solid #00ff88;
+      color: #00ff88;
+      padding: 8px 12px;
+      box-sizing: border-box;
+      outline: none;
+      z-index: 10000;
+      border-radius: 4px;
+    `;
+    
+    this.htmlInput.addEventListener('input', () => {
+      if (this.htmlInput) {
+        this.answerInput = this.htmlInput.value;
         this.updateInputDisplay();
       }
     });
+    
+    this.htmlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.submitAnswer();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this.hideQuestion();
+      }
+    });
+    
+    document.body.appendChild(this.htmlInput);
+    
+    // Focus the input after a short delay
+    setTimeout(() => {
+      if (this.htmlInput) {
+        this.htmlInput.focus();
+      }
+    }, 100);
+  }
+
+  private removeHtmlInput() {
+    if (this.htmlInput && this.htmlInput.parentNode) {
+      this.htmlInput.parentNode.removeChild(this.htmlInput);
+      this.htmlInput = null;
+    }
   }
 
   private updateInputDisplay() {
@@ -629,12 +844,17 @@ export class MainScene extends Phaser.Scene {
         this.hideQuestion();
       } else {
         this.answerInput = '';
+        if (this.htmlInput) {
+          this.htmlInput.value = '';
+          this.htmlInput.focus();
+        }
         this.updateInputDisplay();
       }
     });
   }
 
   private hideQuestion() {
+    this.removeHtmlInput();
     this.questionBox.setVisible(false);
     this.isQuestionOpen = false;
     this.currentQuestion = null;
@@ -660,8 +880,8 @@ export class MainScene extends Phaser.Scene {
   }
 
   private createPlayer() {
-    const startX = 14 * TILE_SIZE;
-    const startY = 14 * TILE_SIZE;
+    const startX = 18 * TILE_SIZE;
+    const startY = 18 * TILE_SIZE;
     
     this.player = this.add.container(startX, startY);
     
@@ -682,9 +902,23 @@ export class MainScene extends Phaser.Scene {
     
     this.physics.world.enable(this.player);
     const body = this.player.body as Phaser.Physics.Arcade.Body;
-    body.setSize(20, 24);
-    body.setOffset(-10, -12);
+    body.setSize(16, 20);
+    body.setOffset(-8, -10);
     body.setCollideWorldBounds(true);
+  }
+
+  private setupCollisions() {
+    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+    
+    // Collide with buildings
+    if (this.buildingBodies) {
+      this.physics.add.collider(this.player, this.buildingBodies);
+    }
+    
+    // Collide with cars
+    if (this.carBodies) {
+      this.physics.add.collider(this.player, this.carBodies);
+    }
   }
 
   private setupCamera() {
@@ -777,5 +1011,9 @@ export class MainScene extends Phaser.Scene {
       }
     }
     this.interactHint.setVisible(nearObject);
+  }
+
+  shutdown() {
+    this.removeHtmlInput();
   }
 }
