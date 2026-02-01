@@ -46,9 +46,22 @@ interface InteractiveObject {
   solved: boolean;
 }
 
-interface Car {
+interface MovingCar {
   container: Phaser.GameObjects.Container;
-  body: Phaser.Physics.Arcade.Body;
+  direction: 'up' | 'down' | 'left' | 'right';
+  speed: number;
+  startX: number;
+  startY: number;
+  maxTravel: number;
+}
+
+interface NPC {
+  container: Phaser.GameObjects.Container;
+  direction: 'up' | 'down' | 'left' | 'right';
+  speed: number;
+  walkTimer: number;
+  pauseTimer: number;
+  isPaused: boolean;
 }
 
 export class MainScene extends Phaser.Scene {
@@ -70,8 +83,8 @@ export class MainScene extends Phaser.Scene {
   private score = 0;
   private inputText!: Phaser.GameObjects.Text;
   private buildingBodies: Phaser.Physics.Arcade.StaticGroup | null = null;
-  private carBodies: Phaser.Physics.Arcade.StaticGroup | null = null;
-  private cars: Car[] = [];
+  private movingCars: MovingCar[] = [];
+  private npcs: NPC[] = [];
   private htmlInput: HTMLInputElement | null = null;
 
   constructor() {
@@ -83,7 +96,8 @@ export class MainScene extends Phaser.Scene {
     this.createTerrain();
     this.createBuildingColliders();
     this.createCityDecorations();
-    this.createCars();
+    this.createMovingCars();
+    this.createNPCs();
     this.createInteractiveObjects();
     this.createPlayer();
     this.setupCollisions();
@@ -331,69 +345,265 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  private createCars() {
-    this.carBodies = this.physics.add.staticGroup();
+  private createMovingCars() {
     const carColors = [0xe53935, 0x1e88e5, 0x43a047, 0xfdd835, 0x8e24aa, 0xff6f00, 0x00897b];
     let carCount = 0;
-    const maxCars = 40;
+    const maxCars = 25;
+    const roadSpacing = 15;
 
-    for (let y = 0; y < MAP_HEIGHT && carCount < maxCars; y++) {
-      for (let x = 0; x < MAP_WIDTH && carCount < maxCars; x++) {
-        if (this.mapData[y][x] === TERRAIN.ROAD && Math.random() < 0.015) {
-          // Check if there's space for a car
-          const worldX = x * TILE_SIZE + TILE_SIZE / 2;
+    // Place cars on main roads
+    for (let roadIdx = roadSpacing; roadIdx < MAP_WIDTH && carCount < maxCars; roadIdx += roadSpacing) {
+      // Horizontal roads
+      if (Math.random() < 0.7) {
+        const y = roadIdx + 1;
+        const x = Phaser.Math.Between(5, MAP_WIDTH - 10);
+        if (y < MAP_HEIGHT && this.mapData[y]?.[x] === TERRAIN.ROAD) {
+          const worldX = x * TILE_SIZE;
           const worldY = y * TILE_SIZE + TILE_SIZE / 2;
-          
-          // Determine car orientation based on road direction
-          const isHorizontalRoad = y > 0 && y < MAP_HEIGHT - 1 && 
-            (this.mapData[y - 1][x] === TERRAIN.SIDEWALK || this.mapData[y + 1][x] === TERRAIN.SIDEWALK);
-          
-          const container = this.add.container(worldX, worldY);
-          const carColor = carColors[Phaser.Math.Between(0, carColors.length - 1)];
-          
-          if (isHorizontalRoad) {
-            // Horizontal car
-            const body = this.add.rectangle(0, 0, 48, 24, carColor);
-            body.setStrokeStyle(2, 0x1a1a1a);
-            const roof = this.add.rectangle(0, 0, 24, 18, this.darkenColor(carColor, 30));
-            const frontLight = this.add.rectangle(22, -6, 4, 6, 0xffffaa);
-            const frontLight2 = this.add.rectangle(22, 6, 4, 6, 0xffffaa);
-            const rearLight = this.add.rectangle(-22, -6, 4, 6, 0xff3333);
-            const rearLight2 = this.add.rectangle(-22, 6, 4, 6, 0xff3333);
-            const wheel1 = this.add.rectangle(-14, -12, 10, 6, 0x1a1a1a);
-            const wheel2 = this.add.rectangle(14, -12, 10, 6, 0x1a1a1a);
-            const wheel3 = this.add.rectangle(-14, 12, 10, 6, 0x1a1a1a);
-            const wheel4 = this.add.rectangle(14, 12, 10, 6, 0x1a1a1a);
-            container.add([wheel1, wheel2, wheel3, wheel4, body, roof, frontLight, frontLight2, rearLight, rearLight2]);
-            
-            // Create collider
-            const collider = this.add.rectangle(worldX, worldY, 48, 24, 0x000000, 0);
-            this.carBodies.add(collider);
-          } else {
-            // Vertical car
-            const body = this.add.rectangle(0, 0, 24, 48, carColor);
-            body.setStrokeStyle(2, 0x1a1a1a);
-            const roof = this.add.rectangle(0, 0, 18, 24, this.darkenColor(carColor, 30));
-            const frontLight = this.add.rectangle(-6, -22, 6, 4, 0xffffaa);
-            const frontLight2 = this.add.rectangle(6, -22, 6, 4, 0xffffaa);
-            const rearLight = this.add.rectangle(-6, 22, 6, 4, 0xff3333);
-            const rearLight2 = this.add.rectangle(6, 22, 6, 4, 0xff3333);
-            const wheel1 = this.add.rectangle(-12, -14, 6, 10, 0x1a1a1a);
-            const wheel2 = this.add.rectangle(-12, 14, 6, 10, 0x1a1a1a);
-            const wheel3 = this.add.rectangle(12, -14, 6, 10, 0x1a1a1a);
-            const wheel4 = this.add.rectangle(12, 14, 6, 10, 0x1a1a1a);
-            container.add([wheel1, wheel2, wheel3, wheel4, body, roof, frontLight, frontLight2, rearLight, rearLight2]);
-            
-            // Create collider
-            const collider = this.add.rectangle(worldX, worldY, 24, 48, 0x000000, 0);
-            this.carBodies.add(collider);
-          }
-          
-          container.setDepth(worldY);
-          this.decorations.add(container);
+          const direction = Math.random() < 0.5 ? 'left' : 'right';
+          this.createMovingCar(worldX, worldY, carColors[carCount % carColors.length], true, direction);
           carCount++;
         }
       }
+      
+      // Vertical roads
+      if (Math.random() < 0.7 && carCount < maxCars) {
+        const x = roadIdx + 1;
+        const y = Phaser.Math.Between(5, MAP_HEIGHT - 10);
+        if (x < MAP_WIDTH && this.mapData[y]?.[x] === TERRAIN.ROAD) {
+          const worldX = x * TILE_SIZE + TILE_SIZE / 2;
+          const worldY = y * TILE_SIZE;
+          const direction = Math.random() < 0.5 ? 'up' : 'down';
+          this.createMovingCar(worldX, worldY, carColors[carCount % carColors.length], false, direction);
+          carCount++;
+        }
+      }
+    }
+  }
+
+  private createMovingCar(x: number, y: number, color: number, isHorizontal: boolean, direction: 'up' | 'down' | 'left' | 'right') {
+    const container = this.add.container(x, y);
+    
+    if (isHorizontal) {
+      const flipX = direction === 'left' ? -1 : 1;
+      const body = this.add.rectangle(0, 0, 48, 24, color);
+      body.setStrokeStyle(2, 0x1a1a1a);
+      const roof = this.add.rectangle(0, 0, 24, 18, this.darkenColor(color, 30));
+      const frontLight = this.add.rectangle(22 * flipX, -6, 4, 6, 0xffffaa);
+      const frontLight2 = this.add.rectangle(22 * flipX, 6, 4, 6, 0xffffaa);
+      const rearLight = this.add.rectangle(-22 * flipX, -6, 4, 6, 0xff3333);
+      const rearLight2 = this.add.rectangle(-22 * flipX, 6, 4, 6, 0xff3333);
+      const wheel1 = this.add.rectangle(-14, -12, 10, 6, 0x1a1a1a);
+      const wheel2 = this.add.rectangle(14, -12, 10, 6, 0x1a1a1a);
+      const wheel3 = this.add.rectangle(-14, 12, 10, 6, 0x1a1a1a);
+      const wheel4 = this.add.rectangle(14, 12, 10, 6, 0x1a1a1a);
+      container.add([wheel1, wheel2, wheel3, wheel4, body, roof, frontLight, frontLight2, rearLight, rearLight2]);
+    } else {
+      const flipY = direction === 'up' ? -1 : 1;
+      const body = this.add.rectangle(0, 0, 24, 48, color);
+      body.setStrokeStyle(2, 0x1a1a1a);
+      const roof = this.add.rectangle(0, 0, 18, 24, this.darkenColor(color, 30));
+      const frontLight = this.add.rectangle(-6, -22 * flipY, 6, 4, 0xffffaa);
+      const frontLight2 = this.add.rectangle(6, -22 * flipY, 6, 4, 0xffffaa);
+      const rearLight = this.add.rectangle(-6, 22 * flipY, 6, 4, 0xff3333);
+      const rearLight2 = this.add.rectangle(6, 22 * flipY, 6, 4, 0xff3333);
+      const wheel1 = this.add.rectangle(-12, -14, 6, 10, 0x1a1a1a);
+      const wheel2 = this.add.rectangle(-12, 14, 6, 10, 0x1a1a1a);
+      const wheel3 = this.add.rectangle(12, -14, 6, 10, 0x1a1a1a);
+      const wheel4 = this.add.rectangle(12, 14, 6, 10, 0x1a1a1a);
+      container.add([wheel1, wheel2, wheel3, wheel4, body, roof, frontLight, frontLight2, rearLight, rearLight2]);
+    }
+    
+    container.setDepth(y);
+    this.decorations.add(container);
+    
+    this.movingCars.push({
+      container,
+      direction,
+      speed: Phaser.Math.Between(60, 120),
+      startX: x,
+      startY: y,
+      maxTravel: Phaser.Math.Between(300, 600),
+    });
+  }
+
+  private createNPCs() {
+    const skinColors = [0xffeaa7, 0xf5cba7, 0xd4a574, 0x8b6914, 0x5d4e37];
+    const shirtColors = [0xe53935, 0x1e88e5, 0x43a047, 0xfdd835, 0x8e24aa, 0xff6f00, 0x00897b, 0xff69b4, 0x9c27b0];
+    const hairColors = [0x000000, 0x5d4037, 0xffd54f, 0x8b0000, 0x2d2d2d, 0xff8c00];
+    let npcCount = 0;
+    const maxNPCs = 35;
+
+    for (let y = 5; y < MAP_HEIGHT - 5 && npcCount < maxNPCs; y += 6) {
+      for (let x = 5; x < MAP_WIDTH - 5 && npcCount < maxNPCs; x += 8) {
+        const terrain = this.mapData[y]?.[x];
+        if ((terrain === TERRAIN.SIDEWALK || terrain === TERRAIN.PARK) && Math.random() < 0.35) {
+          const worldX = x * TILE_SIZE + TILE_SIZE / 2;
+          const worldY = y * TILE_SIZE + TILE_SIZE / 2;
+          
+          const skinColor = skinColors[Phaser.Math.Between(0, skinColors.length - 1)];
+          const shirtColor = shirtColors[Phaser.Math.Between(0, shirtColors.length - 1)];
+          const hairColor = hairColors[Phaser.Math.Between(0, hairColors.length - 1)];
+          
+          this.createNPC(worldX, worldY, skinColor, shirtColor, hairColor);
+          npcCount++;
+        }
+      }
+    }
+  }
+
+  private createNPC(x: number, y: number, skinColor: number, shirtColor: number, hairColor: number) {
+    const container = this.add.container(x, y);
+    
+    // Shadow
+    const shadow = this.add.ellipse(0, 10, 16, 6, 0x000000, 0.3);
+    
+    // Body
+    const body = this.add.rectangle(0, 0, 14, 18, shirtColor);
+    body.setStrokeStyle(1, this.darkenColor(shirtColor, 40));
+    
+    // Legs (will animate)
+    const leftLeg = this.add.rectangle(-3, 12, 5, 10, 0x3d3d3d);
+    leftLeg.setName('leftLeg');
+    const rightLeg = this.add.rectangle(3, 12, 5, 10, 0x3d3d3d);
+    rightLeg.setName('rightLeg');
+    
+    // Head
+    const head = this.add.circle(0, -12, 8, skinColor);
+    head.setStrokeStyle(1, this.darkenColor(skinColor, 30));
+    
+    // Hair
+    const hair = this.add.arc(0, -14, 8, Phaser.Math.DegToRad(180), Phaser.Math.DegToRad(360), false, hairColor);
+    
+    // Eyes
+    const leftEye = this.add.circle(-3, -13, 2, 0x2c3e50);
+    const rightEye = this.add.circle(3, -13, 2, 0x2c3e50);
+    
+    container.add([shadow, leftLeg, rightLeg, body, head, hair, leftEye, rightEye]);
+    container.setDepth(y);
+    this.decorations.add(container);
+    
+    const directions: Array<'up' | 'down' | 'left' | 'right'> = ['up', 'down', 'left', 'right'];
+    
+    this.npcs.push({
+      container,
+      direction: directions[Phaser.Math.Between(0, 3)],
+      speed: Phaser.Math.Between(30, 60),
+      walkTimer: Phaser.Math.Between(2000, 5000),
+      pauseTimer: 0,
+      isPaused: false,
+    });
+  }
+
+  private updateMovingCars(delta: number) {
+    for (const car of this.movingCars) {
+      const moveAmount = car.speed * (delta / 1000);
+      
+      switch (car.direction) {
+        case 'left':
+          car.container.x -= moveAmount;
+          if (car.container.x < car.startX - car.maxTravel) {
+            car.direction = 'right';
+          }
+          break;
+        case 'right':
+          car.container.x += moveAmount;
+          if (car.container.x > car.startX + car.maxTravel) {
+            car.direction = 'left';
+          }
+          break;
+        case 'up':
+          car.container.y -= moveAmount;
+          if (car.container.y < car.startY - car.maxTravel) {
+            car.direction = 'down';
+          }
+          break;
+        case 'down':
+          car.container.y += moveAmount;
+          if (car.container.y > car.startY + car.maxTravel) {
+            car.direction = 'up';
+          }
+          break;
+      }
+      
+      car.container.setDepth(car.container.y);
+    }
+  }
+
+  private updateNPCs(delta: number) {
+    for (const npc of this.npcs) {
+      if (npc.isPaused) {
+        npc.pauseTimer -= delta;
+        if (npc.pauseTimer <= 0) {
+          npc.isPaused = false;
+          // Pick new random direction
+          const directions: Array<'up' | 'down' | 'left' | 'right'> = ['up', 'down', 'left', 'right'];
+          npc.direction = directions[Phaser.Math.Between(0, 3)];
+          npc.walkTimer = Phaser.Math.Between(2000, 5000);
+        }
+        continue;
+      }
+      
+      npc.walkTimer -= delta;
+      if (npc.walkTimer <= 0) {
+        npc.isPaused = true;
+        npc.pauseTimer = Phaser.Math.Between(1000, 3000);
+        continue;
+      }
+      
+      const moveAmount = npc.speed * (delta / 1000);
+      let newX = npc.container.x;
+      let newY = npc.container.y;
+      
+      switch (npc.direction) {
+        case 'left':
+          newX -= moveAmount;
+          break;
+        case 'right':
+          newX += moveAmount;
+          break;
+        case 'up':
+          newY -= moveAmount;
+          break;
+        case 'down':
+          newY += moveAmount;
+          break;
+      }
+      
+      // Check if new position is walkable (sidewalk or park)
+      const tileX = Math.floor(newX / TILE_SIZE);
+      const tileY = Math.floor(newY / TILE_SIZE);
+      
+      if (tileX >= 0 && tileX < MAP_WIDTH && tileY >= 0 && tileY < MAP_HEIGHT) {
+        const terrain = this.mapData[tileY]?.[tileX];
+        if (terrain === TERRAIN.SIDEWALK || terrain === TERRAIN.PARK || terrain === TERRAIN.CROSSWALK) {
+          npc.container.x = newX;
+          npc.container.y = newY;
+        } else {
+          // Turn around
+          const opposites: Record<string, 'up' | 'down' | 'left' | 'right'> = {
+            'up': 'down', 'down': 'up', 'left': 'right', 'right': 'left'
+          };
+          npc.direction = opposites[npc.direction];
+        }
+      } else {
+        // Turn around at map edge
+        const opposites: Record<string, 'up' | 'down' | 'left' | 'right'> = {
+          'up': 'down', 'down': 'up', 'left': 'right', 'right': 'left'
+        };
+        npc.direction = opposites[npc.direction];
+      }
+      
+      // Animate legs
+      const leftLeg = npc.container.getByName('leftLeg') as Phaser.GameObjects.Rectangle;
+      const rightLeg = npc.container.getByName('rightLeg') as Phaser.GameObjects.Rectangle;
+      if (leftLeg && rightLeg) {
+        const legSwing = Math.sin(this.time.now * 0.01) * 3;
+        leftLeg.y = 12 + legSwing;
+        rightLeg.y = 12 - legSwing;
+      }
+      
+      npc.container.setDepth(npc.container.y);
     }
   }
 
@@ -908,16 +1118,9 @@ export class MainScene extends Phaser.Scene {
   }
 
   private setupCollisions() {
-    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
-    
     // Collide with buildings
     if (this.buildingBodies) {
       this.physics.add.collider(this.player, this.buildingBodies);
-    }
-    
-    // Collide with cars
-    if (this.carBodies) {
-      this.physics.add.collider(this.player, this.carBodies);
     }
   }
 
@@ -960,7 +1163,11 @@ export class MainScene extends Phaser.Scene {
     this.scoreText.setDepth(2000);
   }
 
-  update() {
+  update(_time: number, delta: number) {
+    // Update moving entities regardless of question state
+    this.updateMovingCars(delta);
+    this.updateNPCs(delta);
+    
     if (this.isQuestionOpen) return;
     
     const body = this.player.body as Phaser.Physics.Arcade.Body;
