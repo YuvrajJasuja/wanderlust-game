@@ -1168,61 +1168,59 @@ export class MainScene extends Phaser.Scene {
   }
 
   private createMinimap() {
-    const minimapSize = 140;
-    const padding = 12;
+    const minimapSize = 120;
+    const padding = 16;
     const mapX = padding;
-    const mapY = 80; // Below score text
+    const mapY = 90; // Below score text
     
     this.minimapContainer = this.add.container(mapX, mapY);
     this.minimapContainer.setScrollFactor(0);
     this.minimapContainer.setDepth(2500);
     
     // Background with border
-    const bg = this.add.rectangle(minimapSize / 2, minimapSize / 2, minimapSize, minimapSize, 0x1a1a2e, 0.9);
+    const bg = this.add.rectangle(minimapSize / 2, minimapSize / 2, minimapSize + 4, minimapSize + 4, 0x000000, 0.85);
     bg.setStrokeStyle(2, 0x00ff88);
     this.minimapContainer.add(bg);
     
-    // Draw minimap terrain
-    const terrainGraphics = this.add.graphics();
+    // Create a render texture for the minimap terrain
     const scale = minimapSize / (MAP_WIDTH * TILE_SIZE);
     
-    for (let y = 0; y < MAP_HEIGHT; y++) {
-      for (let x = 0; x < MAP_WIDTH; x++) {
+    // Draw terrain directly as rectangles added to container
+    for (let y = 0; y < MAP_HEIGHT; y += 2) {
+      for (let x = 0; x < MAP_WIDTH; x += 2) {
         const terrain = this.mapData[y][x];
         let color = 0x2d4a2d; // Default grass
         
         switch (terrain) {
           case TERRAIN.ROAD:
           case TERRAIN.CROSSWALK:
-            color = 0x3d3d3d;
+            color = 0x4a4a4a;
             break;
           case TERRAIN.SIDEWALK:
-            color = 0x6a6a6a;
+            color = 0x7a7a7a;
             break;
           case TERRAIN.BUILDING:
-            color = 0x4a4a5a;
+            color = 0x5a5a6a;
             break;
           case TERRAIN.PARK:
             color = 0x3d6a3d;
             break;
         }
         
-        const px = x * TILE_SIZE * scale;
-        const py = y * TILE_SIZE * scale;
-        const size = Math.max(1, TILE_SIZE * scale);
+        const px = 2 + x * TILE_SIZE * scale;
+        const py = 2 + y * TILE_SIZE * scale;
+        const size = Math.max(2, TILE_SIZE * scale * 2);
         
-        terrainGraphics.fillStyle(color);
-        terrainGraphics.fillRect(px, py, size, size);
+        const rect = this.add.rectangle(px + size/2, py + size/2, size, size, color);
+        this.minimapContainer.add(rect);
       }
     }
-    
-    this.minimapContainer.add(terrainGraphics);
     
     // Add CTF flag dots
     this.minimapFlagDots = [];
     for (const obj of this.interactiveObjects) {
-      const dotX = obj.container.x * scale;
-      const dotY = obj.container.y * scale;
+      const dotX = 2 + obj.container.x * scale;
+      const dotY = 2 + obj.container.y * scale;
       const flagDot = this.add.circle(dotX, dotY, 3, 0xff4444);
       flagDot.setData('object', obj);
       this.minimapContainer.add(flagDot);
@@ -1230,26 +1228,26 @@ export class MainScene extends Phaser.Scene {
     }
     
     // Player dot (on top)
-    this.minimapPlayerDot = this.add.circle(0, 0, 4, 0x00ff88);
-    this.minimapPlayerDot.setStrokeStyle(1, 0xffffff);
+    this.minimapPlayerDot = this.add.circle(0, 0, 5, 0x00ff88);
+    this.minimapPlayerDot.setStrokeStyle(2, 0xffffff);
     this.minimapContainer.add(this.minimapPlayerDot);
     
     // Title label
-    const label = this.add.text(minimapSize / 2, minimapSize + 8, 'MINIMAP', {
+    const label = this.add.text(minimapSize / 2, -8, 'MAP', {
       fontSize: '8px',
       fontFamily: '"Press Start 2P"',
       color: '#00ff88',
-    }).setOrigin(0.5, 0);
+    }).setOrigin(0.5, 1);
     this.minimapContainer.add(label);
   }
 
   private updateMinimap() {
-    const minimapSize = 140;
+    const minimapSize = 120;
     const scale = minimapSize / (MAP_WIDTH * TILE_SIZE);
     
     // Update player position
-    const playerX = this.player.x * scale;
-    const playerY = this.player.y * scale;
+    const playerX = 2 + this.player.x * scale;
+    const playerY = 2 + this.player.y * scale;
     this.minimapPlayerDot.setPosition(playerX, playerY);
     
     // Update flag dots (solved = green, unsolved = red)
