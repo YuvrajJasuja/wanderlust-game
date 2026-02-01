@@ -86,6 +86,9 @@ export class MainScene extends Phaser.Scene {
   private movingCars: MovingCar[] = [];
   private npcs: NPC[] = [];
   private htmlInput: HTMLInputElement | null = null;
+  private minimapContainer!: Phaser.GameObjects.Container;
+  private minimapPlayerDot!: Phaser.GameObjects.Arc;
+  private minimapFlagDots: Phaser.GameObjects.Arc[] = [];
 
   constructor() {
     super({ key: 'MainScene' });
@@ -104,6 +107,7 @@ export class MainScene extends Phaser.Scene {
     this.setupCamera();
     this.setupControls();
     this.createUI();
+    this.createMinimap();
     this.createQuestionBox();
     this.createInteractHint();
   }
@@ -1163,10 +1167,107 @@ export class MainScene extends Phaser.Scene {
     this.scoreText.setDepth(2000);
   }
 
+  private createMinimap() {
+    const minimapSize = 140;
+    const padding = 12;
+    const mapX = this.cameras.main.width - minimapSize - padding;
+    const mapY = padding;
+    
+    this.minimapContainer = this.add.container(mapX, mapY);
+    this.minimapContainer.setScrollFactor(0);
+    this.minimapContainer.setDepth(2500);
+    
+    // Background with border
+    const bg = this.add.rectangle(minimapSize / 2, minimapSize / 2, minimapSize, minimapSize, 0x1a1a2e, 0.9);
+    bg.setStrokeStyle(2, 0x00ff88);
+    this.minimapContainer.add(bg);
+    
+    // Draw minimap terrain
+    const terrainGraphics = this.add.graphics();
+    const scale = minimapSize / (MAP_WIDTH * TILE_SIZE);
+    
+    for (let y = 0; y < MAP_HEIGHT; y++) {
+      for (let x = 0; x < MAP_WIDTH; x++) {
+        const terrain = this.mapData[y][x];
+        let color = 0x2d4a2d; // Default grass
+        
+        switch (terrain) {
+          case TERRAIN.ROAD:
+          case TERRAIN.CROSSWALK:
+            color = 0x3d3d3d;
+            break;
+          case TERRAIN.SIDEWALK:
+            color = 0x6a6a6a;
+            break;
+          case TERRAIN.BUILDING:
+            color = 0x4a4a5a;
+            break;
+          case TERRAIN.PARK:
+            color = 0x3d6a3d;
+            break;
+        }
+        
+        const px = x * TILE_SIZE * scale;
+        const py = y * TILE_SIZE * scale;
+        const size = Math.max(1, TILE_SIZE * scale);
+        
+        terrainGraphics.fillStyle(color);
+        terrainGraphics.fillRect(px, py, size, size);
+      }
+    }
+    
+    this.minimapContainer.add(terrainGraphics);
+    
+    // Add CTF flag dots
+    this.minimapFlagDots = [];
+    for (const obj of this.interactiveObjects) {
+      const dotX = obj.container.x * scale;
+      const dotY = obj.container.y * scale;
+      const flagDot = this.add.circle(dotX, dotY, 3, 0xff4444);
+      flagDot.setData('object', obj);
+      this.minimapContainer.add(flagDot);
+      this.minimapFlagDots.push(flagDot);
+    }
+    
+    // Player dot (on top)
+    this.minimapPlayerDot = this.add.circle(0, 0, 4, 0x00ff88);
+    this.minimapPlayerDot.setStrokeStyle(1, 0xffffff);
+    this.minimapContainer.add(this.minimapPlayerDot);
+    
+    // Title label
+    const label = this.add.text(minimapSize / 2, minimapSize + 8, 'MINIMAP', {
+      fontSize: '8px',
+      fontFamily: '"Press Start 2P"',
+      color: '#00ff88',
+    }).setOrigin(0.5, 0);
+    this.minimapContainer.add(label);
+  }
+
+  private updateMinimap() {
+    const minimapSize = 140;
+    const scale = minimapSize / (MAP_WIDTH * TILE_SIZE);
+    
+    // Update player position
+    const playerX = this.player.x * scale;
+    const playerY = this.player.y * scale;
+    this.minimapPlayerDot.setPosition(playerX, playerY);
+    
+    // Update flag dots (solved = green, unsolved = red)
+    for (const dot of this.minimapFlagDots) {
+      const obj = dot.getData('object') as InteractiveObject;
+      if (obj.solved) {
+        dot.setFillStyle(0x00ff88); // Green for solved
+      } else {
+        dot.setFillStyle(0xff4444); // Red for unsolved
+      }
+    }
+  }
+
   update(_time: number, delta: number) {
     // Update moving entities regardless of question state
     this.updateMovingCars(delta);
     this.updateNPCs(delta);
+    this.updateMinimap();
     
     if (this.isQuestionOpen) return;
     
