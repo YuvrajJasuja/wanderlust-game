@@ -1170,8 +1170,8 @@ export class MainScene extends Phaser.Scene {
   private createMinimap() {
     const minimapSize = 140;
     const padding = 12;
-    const mapX = this.cameras.main.width - minimapSize - padding;
-    const mapY = padding;
+    const mapX = padding;
+    const mapY = 80; // Below score text
     
     this.minimapContainer = this.add.container(mapX, mapY);
     this.minimapContainer.setScrollFactor(0);
