@@ -837,94 +837,142 @@ export class MainScene extends Phaser.Scene {
     // Remove existing HTML input if any
     this.removeHtmlInput();
     
-    // Overlay
-    const overlay = this.add.rectangle(centerX, centerY, this.cameras.main.width, this.cameras.main.height, 0x000000, 0.8);
+    // Dark overlay with scanlines effect
+    const overlay = this.add.rectangle(centerX, centerY, this.cameras.main.width, this.cameras.main.height, 0x000000, 0.85);
     overlay.setInteractive();
     overlay.on('pointerdown', (pointer: Phaser.Input.Pointer, localX: number, localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
     });
     
-    // Question box
-    const boxBg = this.add.rectangle(centerX, centerY, 380, 300, 0x1a1a2e);
-    boxBg.setStrokeStyle(3, 0x00ff88);
+    // Outer glow border
+    const outerGlow = this.add.rectangle(centerX, centerY, 400, 320, 0x00ffff, 0.1);
+    outerGlow.setStrokeStyle(1, 0x00ffff, 0.3);
     
-    // Header
-    const header = this.add.rectangle(centerX, centerY - 125, 380, 40, 0x00ff88);
-    const headerText = this.add.text(centerX, centerY - 125, `🚩 CTF CHALLENGE [${obj.question.points} pts]`, {
-      fontSize: '14px',
-      fontFamily: '"Press Start 2P"',
-      color: '#1a1a2e',
+    // Main holographic panel
+    const boxBg = this.add.rectangle(centerX, centerY, 390, 310, 0x0a0a15, 0.95);
+    boxBg.setStrokeStyle(2, 0x00ffff);
+    
+    // Inner gradient effect
+    const innerPanel = this.add.rectangle(centerX, centerY, 380, 300, 0x0a0a18, 0.8);
+    innerPanel.setStrokeStyle(1, 0xff00ff, 0.4);
+    
+    // Header bar with gradient feel
+    const header = this.add.rectangle(centerX, centerY - 130, 390, 45, 0x00ffff, 0.15);
+    header.setStrokeStyle(1, 0x00ffff, 0.5);
+    
+    // Header text with glitch styling
+    const headerText = this.add.text(centerX, centerY - 130, `◢ CTF_CHALLENGE [${obj.question.points} PTS] ◣`, {
+      fontSize: '13px',
+      fontFamily: 'Orbitron, sans-serif',
+      color: '#00ffff',
+      shadow: { offsetX: 0, offsetY: 0, color: '#00ffff', blur: 10, fill: true },
     }).setOrigin(0.5);
     
-    // Category/hint
-    const hintText = this.add.text(centerX, centerY - 85, `Category: ${obj.question.hint}`, {
-      fontSize: '12px',
-      fontFamily: 'Arial',
-      color: '#00ff88',
+    // Category badge
+    const categoryBg = this.add.rectangle(centerX, centerY - 90, 180, 26, 0xff00ff, 0.15);
+    categoryBg.setStrokeStyle(1, 0xff00ff, 0.5);
+    const hintText = this.add.text(centerX, centerY - 90, `< ${obj.question.hint.toUpperCase()} >`, {
+      fontSize: '11px',
+      fontFamily: 'Orbitron, sans-serif',
+      color: '#ff00ff',
+      shadow: { offsetX: 0, offsetY: 0, color: '#ff00ff', blur: 6, fill: true },
     }).setOrigin(0.5);
     
-    // Question
-    const questionText = this.add.text(centerX, centerY - 40, obj.question.q, {
-      fontSize: '16px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
+    // Question text
+    const questionText = this.add.text(centerX, centerY - 35, obj.question.q, {
+      fontSize: '15px',
+      fontFamily: 'Rajdhani, sans-serif',
+      color: '#e0e0ff',
       wordWrap: { width: 340 },
       align: 'center',
     }).setOrigin(0.5);
     
-    // Input display (visual only)
-    const inputBg = this.add.rectangle(centerX, centerY + 25, 320, 40, 0x2a2a4e);
+    // Input container with terminal style
+    const inputBg = this.add.rectangle(centerX, centerY + 30, 340, 44, 0x0a0a15);
     inputBg.setStrokeStyle(2, 0x00ff88);
     
-    this.inputText = this.add.text(centerX, centerY + 25, '> Click here to type...', {
+    // Input decoration lines
+    const inputDecor = this.add.rectangle(centerX - 175, centerY + 30, 4, 44, 0x00ff88, 0.5);
+    
+    this.inputText = this.add.text(centerX, centerY + 30, '> awaiting_input_', {
       fontSize: '14px',
-      fontFamily: 'Courier New',
-      color: '#888888',
+      fontFamily: '"Share Tech Mono", monospace',
+      color: '#00ff88',
+      shadow: { offsetX: 0, offsetY: 0, color: '#00ff88', blur: 4, fill: true },
     }).setOrigin(0.5);
     
     // Create HTML input for actual typing
-    this.createHtmlInput(centerX, centerY + 25);
+    this.createHtmlInput(centerX, centerY + 30);
     
-    // Submit button
-    const submitBtn = this.add.rectangle(centerX - 70, centerY + 85, 110, 40, 0x00ff88);
+    // Submit button - Neon cyan
+    const submitBtn = this.add.rectangle(centerX - 75, centerY + 95, 120, 42, 0x00ffff, 0.2);
+    submitBtn.setStrokeStyle(2, 0x00ffff);
     submitBtn.setInteractive({ useHandCursor: true });
-    const submitText = this.add.text(centerX - 70, centerY + 85, 'SUBMIT', {
-      fontSize: '12px',
-      fontFamily: '"Press Start 2P"',
-      color: '#1a1a2e',
+    const submitText = this.add.text(centerX - 75, centerY + 95, '[ SUBMIT ]', {
+      fontSize: '11px',
+      fontFamily: 'Orbitron, sans-serif',
+      color: '#00ffff',
+      shadow: { offsetX: 0, offsetY: 0, color: '#00ffff', blur: 8, fill: true },
     }).setOrigin(0.5);
     
-    submitBtn.on('pointerover', () => submitBtn.setFillStyle(0x44ffaa));
-    submitBtn.on('pointerout', () => submitBtn.setFillStyle(0x00ff88));
+    submitBtn.on('pointerover', () => {
+      submitBtn.setFillStyle(0x00ffff, 0.4);
+      submitText.setColor('#ffffff');
+    });
+    submitBtn.on('pointerout', () => {
+      submitBtn.setFillStyle(0x00ffff, 0.2);
+      submitText.setColor('#00ffff');
+    });
     submitBtn.on('pointerdown', (pointer: Phaser.Input.Pointer, localX: number, localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
       this.submitAnswer();
     });
     
-    // Close button
-    const closeBtn = this.add.rectangle(centerX + 70, centerY + 85, 110, 40, 0xff4444);
+    // Close button - Neon magenta
+    const closeBtn = this.add.rectangle(centerX + 75, centerY + 95, 120, 42, 0xff0066, 0.2);
+    closeBtn.setStrokeStyle(2, 0xff0066);
     closeBtn.setInteractive({ useHandCursor: true });
-    const closeText = this.add.text(centerX + 70, centerY + 85, 'CLOSE', {
-      fontSize: '12px',
-      fontFamily: '"Press Start 2P"',
-      color: '#ffffff',
+    const closeText = this.add.text(centerX + 75, centerY + 95, '[ ABORT ]', {
+      fontSize: '11px',
+      fontFamily: 'Orbitron, sans-serif',
+      color: '#ff0066',
+      shadow: { offsetX: 0, offsetY: 0, color: '#ff0066', blur: 8, fill: true },
     }).setOrigin(0.5);
     
-    closeBtn.on('pointerover', () => closeBtn.setFillStyle(0xff6666));
-    closeBtn.on('pointerout', () => closeBtn.setFillStyle(0xff4444));
+    closeBtn.on('pointerover', () => {
+      closeBtn.setFillStyle(0xff0066, 0.4);
+      closeText.setColor('#ffffff');
+    });
+    closeBtn.on('pointerout', () => {
+      closeBtn.setFillStyle(0xff0066, 0.2);
+      closeText.setColor('#ff0066');
+    });
     closeBtn.on('pointerdown', (pointer: Phaser.Input.Pointer, localX: number, localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
       this.hideQuestion();
     });
     
-    // Instructions
-    const instructions = this.add.text(centerX, centerY + 130, 'Type your answer and press SUBMIT or ENTER', {
+    // Instructions with terminal style
+    const instructions = this.add.text(centerX, centerY + 140, '// input answer → press ENTER or SUBMIT', {
       fontSize: '10px',
-      fontFamily: 'Arial',
-      color: '#666666',
+      fontFamily: '"Share Tech Mono", monospace',
+      color: '#4a6a8a',
     }).setOrigin(0.5);
     
-    this.questionBox.add([overlay, boxBg, header, headerText, hintText, questionText, inputBg, this.inputText, submitBtn, submitText, closeBtn, closeText, instructions]);
+    // Corner decorations
+    const cornerSize = 12;
+    const corners = [
+      this.add.rectangle(centerX - 195 + cornerSize/2, centerY - 155 + cornerSize/2, cornerSize, 2, 0x00ffff),
+      this.add.rectangle(centerX - 195 + 1, centerY - 155 + cornerSize/2, 2, cornerSize, 0x00ffff),
+      this.add.rectangle(centerX + 195 - cornerSize/2, centerY - 155 + cornerSize/2, cornerSize, 2, 0x00ffff),
+      this.add.rectangle(centerX + 195 - 1, centerY - 155 + cornerSize/2, 2, cornerSize, 0x00ffff),
+      this.add.rectangle(centerX - 195 + cornerSize/2, centerY + 155 - cornerSize/2, cornerSize, 2, 0xff00ff),
+      this.add.rectangle(centerX - 195 + 1, centerY + 155 - cornerSize/2, 2, cornerSize, 0xff00ff),
+      this.add.rectangle(centerX + 195 - cornerSize/2, centerY + 155 - cornerSize/2, cornerSize, 2, 0xff00ff),
+      this.add.rectangle(centerX + 195 - 1, centerY + 155 - cornerSize/2, 2, cornerSize, 0xff00ff),
+    ];
+    
+    this.questionBox.add([overlay, outerGlow, boxBg, innerPanel, header, headerText, categoryBg, hintText, questionText, inputBg, inputDecor, this.inputText, submitBtn, submitText, closeBtn, closeText, instructions, ...corners]);
     this.questionBox.setVisible(true);
   }
 
@@ -936,14 +984,14 @@ export class MainScene extends Phaser.Scene {
     const scaleX = canvasRect.width / canvas.width;
     const scaleY = canvasRect.height / canvas.height;
     
-    const inputX = canvasRect.left + (x - 160) * scaleX;
+    const inputX = canvasRect.left + (x - 165) * scaleX;
     const inputY = canvasRect.top + (y - 20) * scaleY;
-    const inputWidth = 320 * scaleX;
-    const inputHeight = 40 * scaleY;
+    const inputWidth = 330 * scaleX;
+    const inputHeight = 42 * scaleY;
     
     this.htmlInput = document.createElement('input');
     this.htmlInput.type = 'text';
-    this.htmlInput.placeholder = 'Type your answer here...';
+    this.htmlInput.placeholder = 'enter_response...';
     this.htmlInput.style.cssText = `
       position: fixed;
       left: ${inputX}px;
@@ -951,16 +999,33 @@ export class MainScene extends Phaser.Scene {
       width: ${inputWidth}px;
       height: ${inputHeight}px;
       font-size: 14px;
-      font-family: 'Courier New', monospace;
-      background: rgba(42, 42, 78, 0.95);
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      background: rgba(10, 10, 21, 0.98);
       border: 2px solid #00ff88;
       color: #00ff88;
-      padding: 8px 12px;
+      padding: 8px 14px;
       box-sizing: border-box;
       outline: none;
       z-index: 10000;
-      border-radius: 4px;
+      border-radius: 2px;
+      text-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+      box-shadow: 0 0 15px rgba(0, 255, 136, 0.2), inset 0 0 30px rgba(0, 255, 136, 0.05);
+      letter-spacing: 1px;
     `;
+    
+    this.htmlInput.addEventListener('focus', () => {
+      if (this.htmlInput) {
+        this.htmlInput.style.borderColor = '#00ffff';
+        this.htmlInput.style.boxShadow = '0 0 20px rgba(0, 255, 255, 0.4), inset 0 0 30px rgba(0, 255, 255, 0.1)';
+      }
+    });
+    
+    this.htmlInput.addEventListener('blur', () => {
+      if (this.htmlInput) {
+        this.htmlInput.style.borderColor = '#00ff88';
+        this.htmlInput.style.boxShadow = '0 0 15px rgba(0, 255, 136, 0.2), inset 0 0 30px rgba(0, 255, 136, 0.05)';
+      }
+    });
     
     this.htmlInput.addEventListener('input', () => {
       if (this.htmlInput) {
@@ -998,8 +1063,8 @@ export class MainScene extends Phaser.Scene {
 
   private updateInputDisplay() {
     if (this.inputText) {
-      this.inputText.setText(this.answerInput.length > 0 ? `> ${this.answerInput}_` : '> Type your answer...');
-      this.inputText.setColor(this.answerInput.length > 0 ? '#00ff88' : '#888888');
+      this.inputText.setText(this.answerInput.length > 0 ? `> ${this.answerInput}_` : '> awaiting_input_');
+      this.inputText.setColor(this.answerInput.length > 0 ? '#00ff88' : '#4a6a8a');
     }
   }
 
@@ -1029,28 +1094,36 @@ export class MainScene extends Phaser.Scene {
     const centerX = this.cameras.main.width / 2;
     const centerY = this.cameras.main.height / 2;
     
-    const resultBg = this.add.rectangle(centerX, centerY, 300, 100, correct ? 0x00aa00 : 0xaa0000);
-    resultBg.setStrokeStyle(3, correct ? 0x00ff00 : 0xff0000);
+    // Outer glow
+    const outerGlow = this.add.rectangle(centerX, centerY, 320, 120, correct ? 0x00ff88 : 0xff0066, 0.15);
+    outerGlow.setScrollFactor(0);
+    outerGlow.setDepth(4000);
+    
+    // Main result box
+    const resultBg = this.add.rectangle(centerX, centerY, 310, 110, 0x0a0a15, 0.95);
+    resultBg.setStrokeStyle(2, correct ? 0x00ff88 : 0xff0066);
     resultBg.setScrollFactor(0);
     resultBg.setDepth(4000);
     
-    const resultText = this.add.text(centerX, centerY - 15, correct ? '🎉 CORRECT!' : '❌ WRONG!', {
-      fontSize: '18px',
-      fontFamily: '"Press Start 2P"',
-      color: '#ffffff',
+    const resultText = this.add.text(centerX, centerY - 18, correct ? '◢ ACCESS_GRANTED ◣' : '◢ ACCESS_DENIED ◣', {
+      fontSize: '15px',
+      fontFamily: 'Orbitron, sans-serif',
+      color: correct ? '#00ff88' : '#ff0066',
+      shadow: { offsetX: 0, offsetY: 0, color: correct ? '#00ff88' : '#ff0066', blur: 12, fill: true },
     }).setOrigin(0.5);
     resultText.setScrollFactor(0);
     resultText.setDepth(4000);
     
-    const subText = this.add.text(centerX, centerY + 20, correct ? `+${points} points` : 'Try again!', {
-      fontSize: '14px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
+    const subText = this.add.text(centerX, centerY + 18, correct ? `+${points} CREDITS ACQUIRED` : 'RETRY SEQUENCE...', {
+      fontSize: '12px',
+      fontFamily: '"Share Tech Mono", monospace',
+      color: correct ? '#00ffff' : '#ff6688',
     }).setOrigin(0.5);
     subText.setScrollFactor(0);
     subText.setDepth(4000);
     
     this.time.delayedCall(1500, () => {
+      outerGlow.destroy();
       resultBg.destroy();
       resultText.destroy();
       subText.destroy();
@@ -1081,15 +1154,21 @@ export class MainScene extends Phaser.Scene {
     this.interactHint.setDepth(2500);
     this.interactHint.setVisible(false);
     
-    const hintBg = this.add.rectangle(0, 0, 180, 28, 0x000000, 0.8);
-    hintBg.setStrokeStyle(1, 0x00ff88);
-    const hintText = this.add.text(0, 0, '🚩 Click to solve CTF!', {
+    // Outer glow
+    const hintGlow = this.add.rectangle(0, 0, 210, 36, 0x00ffff, 0.1);
+    
+    // Main hint box
+    const hintBg = this.add.rectangle(0, 0, 200, 32, 0x0a0a15, 0.9);
+    hintBg.setStrokeStyle(1, 0x00ffff);
+    
+    const hintText = this.add.text(0, 0, '◢ CLICK TO HACK ◣', {
       fontSize: '11px',
-      fontFamily: 'Arial',
-      color: '#00ff88',
+      fontFamily: 'Orbitron, sans-serif',
+      color: '#00ffff',
+      shadow: { offsetX: 0, offsetY: 0, color: '#00ffff', blur: 8, fill: true },
     }).setOrigin(0.5);
     
-    this.interactHint.add([hintBg, hintText]);
+    this.interactHint.add([hintGlow, hintBg, hintText]);
     this.interactHint.setPosition(this.cameras.main.width / 2, this.cameras.main.height - 50);
   }
 
@@ -1146,64 +1225,75 @@ export class MainScene extends Phaser.Scene {
   }
 
   private createUI() {
+    // Cyberpunk style position display
     this.positionText = this.add.text(16, 16, '', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '10px',
-      color: '#ffffff',
-      backgroundColor: '#00000080',
-      padding: { x: 8, y: 6 },
+      fontFamily: 'Orbitron, sans-serif',
+      fontSize: '11px',
+      color: '#00ffff',
+      backgroundColor: '#0a0a1580',
+      padding: { x: 10, y: 8 },
+      shadow: { offsetX: 0, offsetY: 0, color: '#00ffff', blur: 8, fill: true },
     });
     this.positionText.setScrollFactor(0);
     this.positionText.setDepth(2000);
 
-    this.scoreText = this.add.text(16, 45, 'SCORE: 0', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '12px',
-      color: '#00ff88',
-      backgroundColor: '#00000080',
-      padding: { x: 8, y: 6 },
+    // Cyberpunk style score display with neon glow
+    this.scoreText = this.add.text(16, 50, 'SCORE: 0', {
+      fontFamily: 'Orbitron, sans-serif',
+      fontSize: '13px',
+      color: '#ff00ff',
+      backgroundColor: '#0a0a1580',
+      padding: { x: 10, y: 8 },
+      shadow: { offsetX: 0, offsetY: 0, color: '#ff00ff', blur: 10, fill: true },
     });
     this.scoreText.setScrollFactor(0);
     this.scoreText.setDepth(2000);
   }
 
   private createMinimap() {
-    const minimapSize = 120;
+    const minimapSize = 130;
     const padding = 16;
     const mapX = padding;
-    const mapY = 90; // Below score text
+    const mapY = 95;
     
     this.minimapContainer = this.add.container(mapX, mapY);
     this.minimapContainer.setScrollFactor(0);
     this.minimapContainer.setDepth(2500);
     
-    // Background with border
-    const bg = this.add.rectangle(minimapSize / 2, minimapSize / 2, minimapSize + 4, minimapSize + 4, 0x000000, 0.85);
-    bg.setStrokeStyle(2, 0x00ff88);
+    // Cyberpunk holographic background with double border
+    const outerBorder = this.add.rectangle(minimapSize / 2, minimapSize / 2, minimapSize + 8, minimapSize + 8, 0x000000, 0);
+    outerBorder.setStrokeStyle(1, 0xff00ff, 0.5);
+    this.minimapContainer.add(outerBorder);
+    
+    const bg = this.add.rectangle(minimapSize / 2, minimapSize / 2, minimapSize + 4, minimapSize + 4, 0x0a0a15, 0.9);
+    bg.setStrokeStyle(2, 0x00ffff);
     this.minimapContainer.add(bg);
     
-    // Create a render texture for the minimap terrain
+    // Inner glow effect
+    const innerGlow = this.add.rectangle(minimapSize / 2, minimapSize / 2, minimapSize, minimapSize, 0x00ffff, 0.05);
+    this.minimapContainer.add(innerGlow);
+    
     const scale = minimapSize / (MAP_WIDTH * TILE_SIZE);
     
-    // Draw terrain directly as rectangles added to container
+    // Draw terrain with cyberpunk colors
     for (let y = 0; y < MAP_HEIGHT; y += 2) {
       for (let x = 0; x < MAP_WIDTH; x += 2) {
         const terrain = this.mapData[y][x];
-        let color = 0x2d4a2d; // Default grass
+        let color = 0x1a2a2a; // Dark cyber grass
         
         switch (terrain) {
           case TERRAIN.ROAD:
           case TERRAIN.CROSSWALK:
-            color = 0x4a4a4a;
+            color = 0x1a1a25; // Dark road
             break;
           case TERRAIN.SIDEWALK:
-            color = 0x7a7a7a;
+            color = 0x2a2a35; // Dim sidewalk
             break;
           case TERRAIN.BUILDING:
-            color = 0x5a5a6a;
+            color = 0x15152a; // Dark purple buildings
             break;
           case TERRAIN.PARK:
-            color = 0x3d6a3d;
+            color = 0x152a25; // Darker teal park
             break;
         }
         
@@ -1216,47 +1306,73 @@ export class MainScene extends Phaser.Scene {
       }
     }
     
-    // Add CTF flag dots
+    // Add CTF flag dots with neon glow
     this.minimapFlagDots = [];
     for (const obj of this.interactiveObjects) {
       const dotX = 2 + obj.container.x * scale;
       const dotY = 2 + obj.container.y * scale;
-      const flagDot = this.add.circle(dotX, dotY, 3, 0xff4444);
+      // Outer glow
+      const glowDot = this.add.circle(dotX, dotY, 5, 0xff0066, 0.3);
+      this.minimapContainer.add(glowDot);
+      // Inner dot
+      const flagDot = this.add.circle(dotX, dotY, 3, 0xff0066);
       flagDot.setData('object', obj);
+      flagDot.setData('glow', glowDot);
       this.minimapContainer.add(flagDot);
       this.minimapFlagDots.push(flagDot);
     }
     
-    // Player dot (on top)
-    this.minimapPlayerDot = this.add.circle(0, 0, 5, 0x00ff88);
+    // Player dot with cyan glow
+    const playerGlow = this.add.circle(0, 0, 8, 0x00ffff, 0.3);
+    this.minimapContainer.add(playerGlow);
+    this.minimapPlayerDot = this.add.circle(0, 0, 5, 0x00ffff);
     this.minimapPlayerDot.setStrokeStyle(2, 0xffffff);
+    this.minimapPlayerDot.setData('glow', playerGlow);
     this.minimapContainer.add(this.minimapPlayerDot);
     
-    // Title label
-    const label = this.add.text(minimapSize / 2, -8, 'MAP', {
-      fontSize: '8px',
-      fontFamily: '"Press Start 2P"',
-      color: '#00ff88',
+    // Title label with cyber font
+    const label = this.add.text(minimapSize / 2, -10, '[ RADAR ]', {
+      fontSize: '9px',
+      fontFamily: 'Orbitron, sans-serif',
+      color: '#00ffff',
+      shadow: { offsetX: 0, offsetY: 0, color: '#00ffff', blur: 6, fill: true },
     }).setOrigin(0.5, 1);
     this.minimapContainer.add(label);
+    
+    // Decorative corner markers
+    const corners = [
+      { x: 0, y: 0 },
+      { x: minimapSize + 4, y: 0 },
+      { x: 0, y: minimapSize + 4 },
+      { x: minimapSize + 4, y: minimapSize + 4 },
+    ];
+    corners.forEach(corner => {
+      const marker = this.add.rectangle(corner.x, corner.y, 6, 6, 0xff00ff, 0.8);
+      this.minimapContainer.add(marker);
+    });
   }
 
   private updateMinimap() {
-    const minimapSize = 120;
+    const minimapSize = 130;
     const scale = minimapSize / (MAP_WIDTH * TILE_SIZE);
     
-    // Update player position
+    // Update player position and glow
     const playerX = 2 + this.player.x * scale;
     const playerY = 2 + this.player.y * scale;
     this.minimapPlayerDot.setPosition(playerX, playerY);
+    const playerGlow = this.minimapPlayerDot.getData('glow') as Phaser.GameObjects.Arc;
+    if (playerGlow) playerGlow.setPosition(playerX, playerY);
     
-    // Update flag dots (solved = green, unsolved = red)
+    // Update flag dots (solved = neon green, unsolved = neon pink)
     for (const dot of this.minimapFlagDots) {
       const obj = dot.getData('object') as InteractiveObject;
+      const glow = dot.getData('glow') as Phaser.GameObjects.Arc;
       if (obj.solved) {
-        dot.setFillStyle(0x00ff88); // Green for solved
+        dot.setFillStyle(0x00ff88); // Neon green for solved
+        if (glow) glow.setFillStyle(0x00ff88, 0.3);
       } else {
-        dot.setFillStyle(0xff4444); // Red for unsolved
+        dot.setFillStyle(0xff0066); // Neon pink for unsolved
+        if (glow) glow.setFillStyle(0xff0066, 0.3);
       }
     }
   }
