@@ -536,12 +536,15 @@ export class MainScene extends Phaser.Scene {
     container.setDepth(y);
     this.decorations.add(container);
     
-    // Enable physics on NPC
+    // Enable physics on NPC - NOT immovable so they can be pushed
     this.physics.world.enable(container);
     const physBody = container.body as Phaser.Physics.Arcade.Body;
     physBody.setSize(14, 18);
     physBody.setOffset(-7, -9);
-    physBody.setImmovable(true);
+    physBody.setImmovable(false);
+    physBody.setMass(0.8);
+    physBody.setDrag(200, 200);
+    physBody.setBounce(0.3, 0.3);
     
     this.npcBodies.add(container);
     
@@ -1346,21 +1349,59 @@ export class MainScene extends Phaser.Scene {
     body.setSize(16, 20);
     body.setOffset(-8, -10);
     body.setCollideWorldBounds(true);
+    body.setMass(1);
+    body.setDrag(300, 300);
+    body.setBounce(0.2, 0.2);
   }
 
   private setupCollisions() {
-    // Collide with buildings
+    // Collide with buildings (solid - no movement)
     if (this.buildingBodies) {
       this.physics.add.collider(this.player, this.buildingBodies);
     }
     
-    // Collide with cars (player bounces back)
-    this.physics.add.collider(this.player, this.carBodies, () => {
-      // Player hit by car - brief stun/knockback visual feedback could be added here
+    // Collide with cars - player gets knocked back/pushed
+    this.physics.add.collider(this.player, this.carBodies, (playerObj, carObj) => {
+      const playerBody = (playerObj as Phaser.GameObjects.Container).body as Phaser.Physics.Arcade.Body;
+      const carBody = (carObj as Phaser.GameObjects.Container).body as Phaser.Physics.Arcade.Body;
+      
+      // Calculate knockback direction from car to player
+      const dx = playerBody.center.x - carBody.center.x;
+      const dy = playerBody.center.y - carBody.center.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      
+      // Apply strong knockback velocity to player
+      const knockbackForce = 350;
+      playerBody.setVelocity(
+        (dx / dist) * knockbackForce,
+        (dy / dist) * knockbackForce
+      );
     });
     
-    // Collide with NPCs (soft collision - they both adjust)
-    this.physics.add.collider(this.player, this.npcBodies);
+    // Collide with NPCs - both player and NPC move/push each other
+    this.physics.add.collider(this.player, this.npcBodies, (playerObj, npcObj) => {
+      const playerBody = (playerObj as Phaser.GameObjects.Container).body as Phaser.Physics.Arcade.Body;
+      const npcBody = (npcObj as Phaser.GameObjects.Container).body as Phaser.Physics.Arcade.Body;
+      
+      // Calculate push direction
+      const dx = npcBody.center.x - playerBody.center.x;
+      const dy = npcBody.center.y - playerBody.center.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      
+      // Both get pushed apart with appropriate force
+      const pushForce = 150;
+      npcBody.setVelocity(
+        (dx / dist) * pushForce,
+        (dy / dist) * pushForce
+      );
+      playerBody.setVelocity(
+        (-dx / dist) * pushForce * 0.5,
+        (-dy / dist) * pushForce * 0.5
+      );
+    });
+    
+    // NPCs can bump into each other too
+    this.physics.add.collider(this.npcBodies, this.npcBodies);
   }
 
   private setupCamera() {
