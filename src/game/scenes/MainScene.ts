@@ -48,6 +48,7 @@ interface InteractiveObject {
 
 interface MovingCar {
   container: Phaser.GameObjects.Container;
+  body: Phaser.Physics.Arcade.Body | null;
   direction: 'up' | 'down' | 'left' | 'right';
   speed: number;
   startX: number;
@@ -57,11 +58,19 @@ interface MovingCar {
 
 interface NPC {
   container: Phaser.GameObjects.Container;
+  body: Phaser.Physics.Arcade.Body | null;
   direction: 'up' | 'down' | 'left' | 'right';
   speed: number;
   walkTimer: number;
   pauseTimer: number;
   isPaused: boolean;
+}
+
+interface CyberpunkBuilding {
+  container: Phaser.GameObjects.Container;
+  windows: Phaser.GameObjects.Rectangle[];
+  neonSign?: Phaser.GameObjects.Container;
+  flickerTimer: number;
 }
 
 export class MainScene extends Phaser.Scene {
@@ -89,12 +98,19 @@ export class MainScene extends Phaser.Scene {
   private minimapContainer!: Phaser.GameObjects.Container;
   private minimapPlayerDot!: Phaser.GameObjects.Arc;
   private minimapFlagDots: Phaser.GameObjects.Arc[] = [];
+  private cyberpunkBuildings: CyberpunkBuilding[] = [];
+  private carBodies!: Phaser.Physics.Arcade.Group;
+  private npcBodies!: Phaser.Physics.Arcade.Group;
 
   constructor() {
     super({ key: 'MainScene' });
   }
 
   create() {
+    // Initialize physics groups
+    this.carBodies = this.physics.add.group();
+    this.npcBodies = this.physics.add.group();
+    
     this.generateCityMap();
     this.createTerrain();
     this.createBuildingColliders();
@@ -214,13 +230,14 @@ export class MainScene extends Phaser.Scene {
   private createTerrain() {
     this.terrainGraphics = this.add.graphics();
     
+    // Cyberpunk dark color palette
     const colors: Record<number, number> = {
-      [TERRAIN.ROAD]: 0x3d3d3d,
-      [TERRAIN.SIDEWALK]: 0xa0a0a0,
-      [TERRAIN.GRASS]: 0x4a7c3c,
-      [TERRAIN.BUILDING]: 0x5a5a6a,
-      [TERRAIN.PARK]: 0x5c8a4c,
-      [TERRAIN.CROSSWALK]: 0x4d4d4d,
+      [TERRAIN.ROAD]: 0x0a0a12,
+      [TERRAIN.SIDEWALK]: 0x1a1a28,
+      [TERRAIN.GRASS]: 0x0a1a15,
+      [TERRAIN.BUILDING]: 0x12121e,
+      [TERRAIN.PARK]: 0x0a2018,
+      [TERRAIN.CROSSWALK]: 0x121218,
     };
 
     for (let y = 0; y < MAP_HEIGHT; y++) {
@@ -228,7 +245,7 @@ export class MainScene extends Phaser.Scene {
         const terrain = this.mapData[y][x];
         const color = colors[terrain];
         
-        const variation = Phaser.Math.Between(-8, 8);
+        const variation = Phaser.Math.Between(-3, 3);
         const r = ((color >> 16) & 0xFF) + variation;
         const g = ((color >> 8) & 0xFF) + variation;
         const b = (color & 0xFF) + variation;
@@ -239,27 +256,38 @@ export class MainScene extends Phaser.Scene {
         this.terrainGraphics.fillStyle(finalColor);
         this.terrainGraphics.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
 
-        // Road markings
+        // Neon road markings - cyan
         if (terrain === TERRAIN.ROAD) {
-          if ((x + y) % 4 === 0) {
-            this.terrainGraphics.fillStyle(0xffff00, 0.8);
+          if ((x + y) % 6 === 0) {
+            this.terrainGraphics.fillStyle(0x00ffff, 0.4);
             this.terrainGraphics.fillRect(x * TILE_SIZE + 14, y * TILE_SIZE + 14, 4, 4);
           }
-        }
-
-        // Crosswalk stripes
-        if (terrain === TERRAIN.CROSSWALK) {
-          this.terrainGraphics.fillStyle(0xffffff, 0.9);
-          for (let stripe = 0; stripe < 4; stripe++) {
-            this.terrainGraphics.fillRect(x * TILE_SIZE + stripe * 8, y * TILE_SIZE + 2, 6, TILE_SIZE - 4);
+          // Subtle road lines
+          if (x % 3 === 0) {
+            this.terrainGraphics.fillStyle(0x1a1a2e, 1);
+            this.terrainGraphics.fillRect(x * TILE_SIZE, y * TILE_SIZE, 1, TILE_SIZE);
           }
         }
 
-        // Sidewalk texture
+        // Crosswalk stripes - neon style
+        if (terrain === TERRAIN.CROSSWALK) {
+          this.terrainGraphics.fillStyle(0x00ffff, 0.5);
+          for (let stripe = 0; stripe < 4; stripe++) {
+            this.terrainGraphics.fillRect(x * TILE_SIZE + stripe * 8, y * TILE_SIZE + 4, 5, TILE_SIZE - 8);
+          }
+        }
+
+        // Sidewalk texture with subtle neon grid
         if (terrain === TERRAIN.SIDEWALK) {
-          this.terrainGraphics.fillStyle(0x909090, 0.3);
+          this.terrainGraphics.fillStyle(0x00ffff, 0.08);
           this.terrainGraphics.fillRect(x * TILE_SIZE, y * TILE_SIZE, 1, TILE_SIZE);
           this.terrainGraphics.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, 1);
+        }
+        
+        // Park with subtle glow spots
+        if (terrain === TERRAIN.PARK && Math.random() < 0.02) {
+          this.terrainGraphics.fillStyle(0x00ff88, 0.15);
+          this.terrainGraphics.fillCircle(x * TILE_SIZE + 16, y * TILE_SIZE + 16, 8);
         }
       }
     }
@@ -401,7 +429,10 @@ export class MainScene extends Phaser.Scene {
       const wheel2 = this.add.rectangle(14, -12, 10, 6, 0x1a1a1a);
       const wheel3 = this.add.rectangle(-14, 12, 10, 6, 0x1a1a1a);
       const wheel4 = this.add.rectangle(14, 12, 10, 6, 0x1a1a1a);
-      container.add([wheel1, wheel2, wheel3, wheel4, body, roof, frontLight, frontLight2, rearLight, rearLight2]);
+      
+      // Neon underglow
+      const underglow = this.add.rectangle(0, 14, 44, 4, color, 0.5);
+      container.add([underglow, wheel1, wheel2, wheel3, wheel4, body, roof, frontLight, frontLight2, rearLight, rearLight2]);
     } else {
       const flipY = direction === 'up' ? -1 : 1;
       const body = this.add.rectangle(0, 0, 24, 48, color);
@@ -415,14 +446,32 @@ export class MainScene extends Phaser.Scene {
       const wheel2 = this.add.rectangle(-12, 14, 6, 10, 0x1a1a1a);
       const wheel3 = this.add.rectangle(12, -14, 6, 10, 0x1a1a1a);
       const wheel4 = this.add.rectangle(12, 14, 6, 10, 0x1a1a1a);
-      container.add([wheel1, wheel2, wheel3, wheel4, body, roof, frontLight, frontLight2, rearLight, rearLight2]);
+      
+      // Neon underglow
+      const underglow = this.add.rectangle(14, 0, 4, 44, color, 0.5);
+      container.add([underglow, wheel1, wheel2, wheel3, wheel4, body, roof, frontLight, frontLight2, rearLight, rearLight2]);
     }
     
     container.setDepth(y);
     this.decorations.add(container);
     
+    // Enable physics on the container
+    this.physics.world.enable(container);
+    const physBody = container.body as Phaser.Physics.Arcade.Body;
+    if (isHorizontal) {
+      physBody.setSize(48, 24);
+      physBody.setOffset(-24, -12);
+    } else {
+      physBody.setSize(24, 48);
+      physBody.setOffset(-12, -24);
+    }
+    physBody.setImmovable(true);
+    
+    this.carBodies.add(container);
+    
     this.movingCars.push({
       container,
+      body: physBody,
       direction,
       speed: Phaser.Math.Between(60, 120),
       startX: x,
@@ -479,18 +528,28 @@ export class MainScene extends Phaser.Scene {
     // Hair
     const hair = this.add.arc(0, -14, 8, Phaser.Math.DegToRad(180), Phaser.Math.DegToRad(360), false, hairColor);
     
-    // Eyes
-    const leftEye = this.add.circle(-3, -13, 2, 0x2c3e50);
-    const rightEye = this.add.circle(3, -13, 2, 0x2c3e50);
+    // Eyes - cyberpunk glowing style
+    const leftEye = this.add.circle(-3, -13, 2, 0x00ffff);
+    const rightEye = this.add.circle(3, -13, 2, 0x00ffff);
     
     container.add([shadow, leftLeg, rightLeg, body, head, hair, leftEye, rightEye]);
     container.setDepth(y);
     this.decorations.add(container);
     
+    // Enable physics on NPC
+    this.physics.world.enable(container);
+    const physBody = container.body as Phaser.Physics.Arcade.Body;
+    physBody.setSize(14, 18);
+    physBody.setOffset(-7, -9);
+    physBody.setImmovable(true);
+    
+    this.npcBodies.add(container);
+    
     const directions: Array<'up' | 'down' | 'left' | 'right'> = ['up', 'down', 'left', 'right'];
     
     this.npcs.push({
       container,
+      body: physBody,
       direction: directions[Phaser.Math.Between(0, 3)],
       speed: Phaser.Math.Between(30, 60),
       walkTimer: Phaser.Math.Between(2000, 5000),
@@ -620,29 +679,118 @@ export class MainScene extends Phaser.Scene {
 
   private createBuilding(x: number, y: number) {
     const container = this.add.container(x, y);
-    const height = Phaser.Math.Between(50, 100);
-    const colors = [0x8b7355, 0x9a8b7a, 0x7a6b5a, 0xa08070, 0x6a5a4a, 0x5a6a7a, 0x7a5a6a];
-    const color = colors[Phaser.Math.Between(0, colors.length - 1)];
+    const height = Phaser.Math.Between(60, 120);
+    const width = Phaser.Math.Between(26, 36);
     
-    // Building body
-    const body = this.add.rectangle(0, -height / 2 + 16, 28, height, color);
-    body.setStrokeStyle(2, 0x3a3a3a);
+    // Cyberpunk building colors - dark with accent colors
+    const baseColors = [0x15152a, 0x1a1a2e, 0x16213e, 0x0f0f23, 0x1a1a35, 0x121225];
+    const accentColors = [0x00ffff, 0xff00ff, 0x00ff88, 0xff6600, 0x0088ff, 0xff0066];
+    const baseColor = baseColors[Phaser.Math.Between(0, baseColors.length - 1)];
+    const accentColor = accentColors[Phaser.Math.Between(0, accentColors.length - 1)];
     
-    // Windows
-    const windowColor = Math.random() < 0.3 ? 0xffffaa : 0x87ceeb;
-    for (let wy = 0; wy < Math.floor(height / 16); wy++) {
+    // Building body - dark cyberpunk style
+    const bodyBg = this.add.rectangle(0, -height / 2 + 16, width, height, baseColor);
+    bodyBg.setStrokeStyle(2, accentColor, 0.6);
+    container.add(bodyBg);
+    
+    // Vertical neon strips on building edges
+    const leftStrip = this.add.rectangle(-width / 2 + 1, -height / 2 + 16, 2, height, accentColor, 0.4);
+    const rightStrip = this.add.rectangle(width / 2 - 1, -height / 2 + 16, 2, height, accentColor, 0.4);
+    container.add([leftStrip, rightStrip]);
+    
+    // Animated glowing windows with different states
+    const windows: Phaser.GameObjects.Rectangle[] = [];
+    const windowColors = [0x00ffff, 0xff00ff, 0x00ff88, 0xffff00, 0xff6600];
+    const numFloors = Math.floor(height / 18);
+    
+    for (let wy = 0; wy < numFloors; wy++) {
       for (let wx = -1; wx <= 1; wx += 2) {
-        const window = this.add.rectangle(wx * 8, -height + 20 + wy * 14, 5, 8, windowColor);
+        const isLit = Math.random() < 0.7;
+        const windowColor = isLit ? windowColors[Phaser.Math.Between(0, windowColors.length - 1)] : 0x1a1a25;
+        const windowAlpha = isLit ? (0.5 + Math.random() * 0.5) : 0.3;
+        
+        // Window glow
+        if (isLit) {
+          const glow = this.add.rectangle(wx * 8, -height + 24 + wy * 16, 8, 10, windowColor, 0.2);
+          container.add(glow);
+        }
+        
+        const window = this.add.rectangle(wx * 8, -height + 24 + wy * 16, 6, 8, windowColor, windowAlpha);
+        windows.push(window);
         container.add(window);
       }
     }
     
-    // Roof
-    const roof = this.add.rectangle(0, -height + 10, 32, 6, 0x4a4a4a);
+    // Neon roof with glow effect
+    const roofGlow = this.add.rectangle(0, -height + 8, width + 4, 4, accentColor, 0.3);
+    const roof = this.add.rectangle(0, -height + 10, width + 2, 6, 0x1a1a2e);
+    roof.setStrokeStyle(1, accentColor);
+    container.add([roofGlow, roof]);
     
-    container.add([body, roof]);
+    // Random chance for holographic sign
+    if (Math.random() < 0.3) {
+      const signContainer = this.createNeonSign(accentColor, width);
+      signContainer.setPosition(0, -height + 30);
+      container.add(signContainer);
+    }
+    
+    // Antenna or satellite dish on some buildings
+    if (Math.random() < 0.4) {
+      const antenna = this.add.rectangle(Phaser.Math.Between(-5, 5), -height + 2, 2, 12, 0x4a4a6a);
+      const antennaLight = this.add.circle(Phaser.Math.Between(-5, 5), -height - 4, 2, 0xff0000);
+      container.add([antenna, antennaLight]);
+    }
+    
     container.setDepth(y + height);
     this.decorations.add(container);
+    
+    // Store building for animation
+    this.cyberpunkBuildings.push({
+      container,
+      windows,
+      flickerTimer: Phaser.Math.Between(0, 2000),
+    });
+  }
+
+  private createNeonSign(color: number, buildingWidth: number): Phaser.GameObjects.Container {
+    const signContainer = this.add.container(0, 0);
+    const signs = ['DATA', 'HACK', 'NET', 'SYS', 'BYTE', 'CODE', 'LINK', 'CORE'];
+    const signText = signs[Phaser.Math.Between(0, signs.length - 1)];
+    
+    // Sign background
+    const signBg = this.add.rectangle(0, 0, buildingWidth - 4, 12, 0x0a0a15, 0.9);
+    signBg.setStrokeStyle(1, color, 0.8);
+    
+    // Sign text with glow
+    const text = this.add.text(0, 0, signText, {
+      fontSize: '7px',
+      fontFamily: 'Orbitron, sans-serif',
+      color: `#${color.toString(16).padStart(6, '0')}`,
+    }).setOrigin(0.5);
+    
+    signContainer.add([signBg, text]);
+    return signContainer;
+  }
+
+  private updateBuildingAnimations(delta: number) {
+    for (const building of this.cyberpunkBuildings) {
+      building.flickerTimer -= delta;
+      
+      if (building.flickerTimer <= 0) {
+        // Random window flicker
+        const randomWindow = building.windows[Phaser.Math.Between(0, building.windows.length - 1)];
+        if (randomWindow) {
+          const currentAlpha = randomWindow.alpha;
+          // Quick flicker effect
+          randomWindow.setAlpha(currentAlpha * 0.3);
+          this.time.delayedCall(50, () => {
+            randomWindow.setAlpha(currentAlpha);
+          });
+        }
+        
+        building.flickerTimer = Phaser.Math.Between(500, 3000);
+      }
+    }
   }
 
   private createParkDecor(x: number, y: number) {
@@ -1205,6 +1353,14 @@ export class MainScene extends Phaser.Scene {
     if (this.buildingBodies) {
       this.physics.add.collider(this.player, this.buildingBodies);
     }
+    
+    // Collide with cars (player bounces back)
+    this.physics.add.collider(this.player, this.carBodies, () => {
+      // Player hit by car - brief stun/knockback visual feedback could be added here
+    });
+    
+    // Collide with NPCs (soft collision - they both adjust)
+    this.physics.add.collider(this.player, this.npcBodies);
   }
 
   private setupCamera() {
@@ -1382,6 +1538,7 @@ export class MainScene extends Phaser.Scene {
     this.updateMovingCars(delta);
     this.updateNPCs(delta);
     this.updateMinimap();
+    this.updateBuildingAnimations(delta);
     
     if (this.isQuestionOpen) return;
     
