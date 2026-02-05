@@ -1225,9 +1225,13 @@ export class MainScene extends Phaser.Scene {
     const correct = this.answerInput.toLowerCase().trim() === this.currentQuestion.question.a.toLowerCase();
     
     if (correct) {
-      this.score += this.currentQuestion.question.points;
+      const points = this.currentQuestion.question.points;
+      this.score += points;
       this.currentQuestion.solved = true;
       this.scoreText.setText(`SCORE: ${this.score}`);
+      
+      // Emit score update event to sync with team leaderboard
+      this.game.events.emit('scoreUpdate', points);
       
       // Mark as solved visually
       const flag = this.currentQuestion.container.list.find((obj) => obj instanceof Phaser.GameObjects.Text) as Phaser.GameObjects.Text;
