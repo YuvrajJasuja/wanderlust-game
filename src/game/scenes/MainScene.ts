@@ -1360,25 +1360,25 @@ export class MainScene extends Phaser.Scene {
       this.physics.add.collider(this.player, this.buildingBodies);
     }
     
-    // Collide with cars - player gets knocked back/pushed
+    // Collide with cars - gentle nudge to player
     this.physics.add.collider(this.player, this.carBodies, (playerObj, carObj) => {
       const playerBody = (playerObj as Phaser.GameObjects.Container).body as Phaser.Physics.Arcade.Body;
       const carBody = (carObj as Phaser.GameObjects.Container).body as Phaser.Physics.Arcade.Body;
       
-      // Calculate knockback direction from car to player
+      // Calculate nudge direction from car to player
       const dx = playerBody.center.x - carBody.center.x;
       const dy = playerBody.center.y - carBody.center.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
       
-      // Apply strong knockback velocity to player
-      const knockbackForce = 350;
+      // Apply gentle nudge - just enough to push player aside
+      const nudgeForce = 80;
       playerBody.setVelocity(
-        (dx / dist) * knockbackForce,
-        (dy / dist) * knockbackForce
+        playerBody.velocity.x + (dx / dist) * nudgeForce,
+        playerBody.velocity.y + (dy / dist) * nudgeForce
       );
     });
     
-    // Collide with NPCs - both player and NPC move/push each other
+    // Collide with NPCs - both shift slightly apart
     this.physics.add.collider(this.player, this.npcBodies, (playerObj, npcObj) => {
       const playerBody = (playerObj as Phaser.GameObjects.Container).body as Phaser.Physics.Arcade.Body;
       const npcBody = (npcObj as Phaser.GameObjects.Container).body as Phaser.Physics.Arcade.Body;
@@ -1388,15 +1388,15 @@ export class MainScene extends Phaser.Scene {
       const dy = npcBody.center.y - playerBody.center.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
       
-      // Both get pushed apart with appropriate force
-      const pushForce = 150;
+      // Both shift slightly - subtle mutual push
+      const shiftForce = 40;
       npcBody.setVelocity(
-        (dx / dist) * pushForce,
-        (dy / dist) * pushForce
+        npcBody.velocity.x + (dx / dist) * shiftForce,
+        npcBody.velocity.y + (dy / dist) * shiftForce
       );
       playerBody.setVelocity(
-        (-dx / dist) * pushForce * 0.5,
-        (-dy / dist) * pushForce * 0.5
+        playerBody.velocity.x + (-dx / dist) * shiftForce,
+        playerBody.velocity.y + (-dy / dist) * shiftForce
       );
     });
     
