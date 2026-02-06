@@ -15,35 +15,38 @@ const TERRAIN = {
   CROSSWALK: 5,
 };
 
-// CTF Questions with varying difficulty
+// CTF Questions - 100 points each with detailed hints
 const CTF_QUESTIONS = [
-  { q: "What does HTML stand for?", a: "hypertext markup language", hint: "Web basics", points: 10 },
-  { q: "What port does HTTP use by default?", a: "80", hint: "Networking", points: 15 },
-  { q: "What is 0x1F in decimal?", a: "31", hint: "Hex conversion", points: 20 },
-  { q: "What command lists files in Linux?", a: "ls", hint: "Linux basics", points: 10 },
-  { q: "What does SQL stand for?", a: "structured query language", hint: "Databases", points: 15 },
-  { q: "What is the binary of 42?", a: "101010", hint: "Binary conversion", points: 20 },
-  { q: "What protocol encrypts HTTP?", a: "https", hint: "Security", points: 15 },
-  { q: "What port does SSH use?", a: "22", hint: "Networking", points: 15 },
-  { q: "What is 2^10?", a: "1024", hint: "Powers of 2", points: 10 },
-  { q: "What does CPU stand for?", a: "central processing unit", hint: "Hardware", points: 10 },
-  { q: "What is the localhost IP?", a: "127.0.0.1", hint: "Networking", points: 15 },
-  { q: "What encoding uses A-Z, a-z, 0-9, +, /?", a: "base64", hint: "Encoding", points: 20 },
-  { q: "What does API stand for?", a: "application programming interface", hint: "Development", points: 15 },
-  { q: "What is ROT13 of 'hello'?", a: "uryyb", hint: "Cipher", points: 25 },
-  { q: "What file extension do Python scripts use?", a: "py", hint: "Programming", points: 10 },
-  { q: "What does DNS stand for?", a: "domain name system", hint: "Networking", points: 15 },
-  { q: "What is the default MySQL port?", a: "3306", hint: "Databases", points: 20 },
-  { q: "What does RAM stand for?", a: "random access memory", hint: "Hardware", points: 10 },
-  { q: "What is 0b1010 in decimal?", a: "10", hint: "Binary", points: 15 },
-  { q: "What hash algorithm produces 128-bit digest?", a: "md5", hint: "Cryptography", points: 25 },
+  { q: "What does HTML stand for?", a: "hypertext markup language", hint: "Web basics", detailedHint: "Think about how web pages are structured and marked up", points: 100 },
+  { q: "What port does HTTP use by default?", a: "80", hint: "Networking", detailedHint: "This is the standard unsecured web port, a nice round number", points: 100 },
+  { q: "What is 0x1F in decimal?", a: "31", hint: "Hex conversion", detailedHint: "1*16 + 15 = ?", points: 100 },
+  { q: "What command lists files in Linux?", a: "ls", hint: "Linux basics", detailedHint: "Short for 'list'", points: 100 },
+  { q: "What does SQL stand for?", a: "structured query language", hint: "Databases", detailedHint: "It's a language for querying databases in a structured way", points: 100 },
+  { q: "What is the binary of 42?", a: "101010", hint: "Binary conversion", detailedHint: "32+8+2 in powers of 2", points: 100 },
+  { q: "What protocol encrypts HTTP?", a: "https", hint: "Security", detailedHint: "Just add 'S' for secure", points: 100 },
+  { q: "What port does SSH use?", a: "22", hint: "Networking", detailedHint: "One of the lowest commonly used service ports", points: 100 },
+  { q: "What is 2^10?", a: "1024", hint: "Powers of 2", detailedHint: "1 kilobyte in bytes", points: 100 },
+  { q: "What does CPU stand for?", a: "central processing unit", hint: "Hardware", detailedHint: "The brain of the computer that processes everything centrally", points: 100 },
+  { q: "What is the localhost IP?", a: "127.0.0.1", hint: "Networking", detailedHint: "The loopback address, starts with 127", points: 100 },
+  { q: "What encoding uses A-Z, a-z, 0-9, +, /?", a: "base64", hint: "Encoding", detailedHint: "26+26+10+2 = 64 characters", points: 100 },
+  { q: "What does API stand for?", a: "application programming interface", hint: "Development", detailedHint: "An interface for programming applications", points: 100 },
+  { q: "What is ROT13 of 'hello'?", a: "uryyb", hint: "Cipher", detailedHint: "Rotate each letter 13 positions: h→u, e→r, l→y, l→y, o→b", points: 100 },
+  { q: "What file extension do Python scripts use?", a: "py", hint: "Programming", detailedHint: "First two letters of Python", points: 100 },
+  { q: "What does DNS stand for?", a: "domain name system", hint: "Networking", detailedHint: "The system that converts domain names to IPs", points: 100 },
+  { q: "What is the default MySQL port?", a: "3306", hint: "Databases", detailedHint: "Starts with 33, ends with 06", points: 100 },
+  { q: "What does RAM stand for?", a: "random access memory", hint: "Hardware", detailedHint: "Memory that can be accessed randomly, not sequentially", points: 100 },
+  { q: "What is 0b1010 in decimal?", a: "10", hint: "Binary", detailedHint: "8+0+2+0 = ?", points: 100 },
+  { q: "What hash algorithm produces 128-bit digest?", a: "md5", hint: "Cryptography", detailedHint: "Message Digest version 5", points: 100 },
 ];
+
+const HINT_COST = 30;
 
 interface InteractiveObject {
   container: Phaser.GameObjects.Container;
   type: string;
-  question: { q: string; a: string; hint: string; points: number };
+  question: { q: string; a: string; hint: string; detailedHint: string; points: number };
   solved: boolean;
+  hintUsed: boolean;
 }
 
 interface MovingCar {
@@ -101,6 +104,9 @@ export class MainScene extends Phaser.Scene {
   private cyberpunkBuildings: CyberpunkBuilding[] = [];
   private carBodies!: Phaser.Physics.Arcade.Group;
   private npcBodies!: Phaser.Physics.Arcade.Group;
+  private hintConfirmBox!: Phaser.GameObjects.Container;
+  private isHintConfirmOpen = false;
+  private revealedHintText: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super({ key: 'MainScene' });
@@ -853,7 +859,7 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  private createCityObject(x: number, y: number, type: string, question: { q: string; a: string; hint: string; points: number }) {
+  private createCityObject(x: number, y: number, type: string, question: { q: string; a: string; hint: string; detailedHint: string; points: number }) {
     const container = this.add.container(x, y);
     
     switch (type) {
@@ -891,7 +897,7 @@ export class MainScene extends Phaser.Scene {
     container.setSize(30, 40);
     container.setInteractive({ useHandCursor: true });
     
-    const obj: InteractiveObject = { container, type, question, solved: false };
+    const obj: InteractiveObject = { container, type, question, solved: false, hintUsed: false };
     
     container.on('pointerdown', () => {
       if (!obj.solved) {
@@ -979,6 +985,7 @@ export class MainScene extends Phaser.Scene {
     this.isQuestionOpen = true;
     this.currentQuestion = obj;
     this.answerInput = '';
+    this.revealedHintText = null;
     
     const centerX = this.cameras.main.width / 2;
     const centerY = this.cameras.main.height / 2;
@@ -989,77 +996,113 @@ export class MainScene extends Phaser.Scene {
     this.removeHtmlInput();
     
     // Dark overlay with scanlines effect
-    const overlay = this.add.rectangle(centerX, centerY, this.cameras.main.width, this.cameras.main.height, 0x000000, 0.85);
+    const overlay = this.add.rectangle(centerX, centerY, this.cameras.main.width, this.cameras.main.height, 0x000000, 0.88);
     overlay.setInteractive();
     overlay.on('pointerdown', (pointer: Phaser.Input.Pointer, localX: number, localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
     });
     
-    // Outer glow border
-    const outerGlow = this.add.rectangle(centerX, centerY, 400, 320, 0x00ffff, 0.1);
-    outerGlow.setStrokeStyle(1, 0x00ffff, 0.3);
+    // Outer glow border - larger panel for new layout
+    const outerGlow = this.add.rectangle(centerX, centerY, 460, 400, 0x00ffff, 0.12);
+    outerGlow.setStrokeStyle(2, 0x00ffff, 0.4);
     
     // Main holographic panel
-    const boxBg = this.add.rectangle(centerX, centerY, 390, 310, 0x0a0a15, 0.95);
+    const boxBg = this.add.rectangle(centerX, centerY, 450, 390, 0x0a0a15, 0.96);
     boxBg.setStrokeStyle(2, 0x00ffff);
     
     // Inner gradient effect
-    const innerPanel = this.add.rectangle(centerX, centerY, 380, 300, 0x0a0a18, 0.8);
-    innerPanel.setStrokeStyle(1, 0xff00ff, 0.4);
+    const innerPanel = this.add.rectangle(centerX, centerY, 440, 380, 0x080812, 0.85);
+    innerPanel.setStrokeStyle(1, 0xff00ff, 0.3);
     
-    // Header bar with gradient feel
-    const header = this.add.rectangle(centerX, centerY - 130, 390, 45, 0x00ffff, 0.15);
-    header.setStrokeStyle(1, 0x00ffff, 0.5);
+    // Header bar with points display
+    const header = this.add.rectangle(centerX, centerY - 165, 450, 50, 0x00ffff, 0.12);
+    header.setStrokeStyle(1, 0x00ffff, 0.6);
     
-    // Header text with glitch styling
-    const headerText = this.add.text(centerX, centerY - 130, `◢ CTF_CHALLENGE [${obj.question.points} PTS] ◣`, {
-      fontSize: '13px',
+    // Header text with points badge
+    const headerText = this.add.text(centerX - 80, centerY - 165, '◢ CTF_CHALLENGE ◣', {
+      fontSize: '14px',
       fontFamily: 'Orbitron, sans-serif',
       color: '#00ffff',
-      shadow: { offsetX: 0, offsetY: 0, color: '#00ffff', blur: 10, fill: true },
+      shadow: { offsetX: 0, offsetY: 0, color: '#00ffff', blur: 12, fill: true },
+    }).setOrigin(0.5);
+    
+    // Points badge
+    const pointsBadge = this.add.rectangle(centerX + 120, centerY - 165, 90, 30, 0x00ff88, 0.2);
+    pointsBadge.setStrokeStyle(2, 0x00ff88);
+    const pointsText = this.add.text(centerX + 120, centerY - 165, `+${obj.question.points} PTS`, {
+      fontSize: '12px',
+      fontFamily: 'Orbitron, sans-serif',
+      color: '#00ff88',
+      shadow: { offsetX: 0, offsetY: 0, color: '#00ff88', blur: 8, fill: true },
     }).setOrigin(0.5);
     
     // Category badge
-    const categoryBg = this.add.rectangle(centerX, centerY - 90, 180, 26, 0xff00ff, 0.15);
+    const categoryBg = this.add.rectangle(centerX, centerY - 120, 160, 28, 0xff00ff, 0.15);
     categoryBg.setStrokeStyle(1, 0xff00ff, 0.5);
-    const hintText = this.add.text(centerX, centerY - 90, `< ${obj.question.hint.toUpperCase()} >`, {
-      fontSize: '11px',
+    const categoryText = this.add.text(centerX, centerY - 120, `< ${obj.question.hint.toUpperCase()} >`, {
+      fontSize: '10px',
       fontFamily: 'Orbitron, sans-serif',
       color: '#ff00ff',
       shadow: { offsetX: 0, offsetY: 0, color: '#ff00ff', blur: 6, fill: true },
     }).setOrigin(0.5);
     
-    // Question text
-    const questionText = this.add.text(centerX, centerY - 35, obj.question.q, {
-      fontSize: '15px',
+    // Question container with better spacing
+    const questionBg = this.add.rectangle(centerX, centerY - 65, 400, 60, 0x1a1a28, 0.6);
+    questionBg.setStrokeStyle(1, 0x3a3a4a, 0.5);
+    const questionText = this.add.text(centerX, centerY - 65, obj.question.q, {
+      fontSize: '16px',
       fontFamily: 'Rajdhani, sans-serif',
-      color: '#e0e0ff',
-      wordWrap: { width: 340 },
+      color: '#e8e8ff',
+      wordWrap: { width: 380 },
       align: 'center',
+      lineSpacing: 4,
     }).setOrigin(0.5);
     
+    // Hint reveal area (initially empty or shows revealed hint)
+    const hintAreaBg = this.add.rectangle(centerX, centerY - 10, 400, 36, 0x0a0a15, 0.8);
+    hintAreaBg.setStrokeStyle(1, 0xffaa00, 0.3);
+    
+    if (obj.hintUsed) {
+      this.revealedHintText = this.add.text(centerX, centerY - 10, `💡 ${obj.question.detailedHint}`, {
+        fontSize: '12px',
+        fontFamily: '"Share Tech Mono", monospace',
+        color: '#ffaa00',
+        wordWrap: { width: 380 },
+        align: 'center',
+      }).setOrigin(0.5);
+    } else {
+      this.revealedHintText = this.add.text(centerX, centerY - 10, '// hint not revealed', {
+        fontSize: '11px',
+        fontFamily: '"Share Tech Mono", monospace',
+        color: '#4a4a5a',
+      }).setOrigin(0.5);
+    }
+    
     // Input container with terminal style
-    const inputBg = this.add.rectangle(centerX, centerY + 30, 340, 44, 0x0a0a15);
+    const inputBg = this.add.rectangle(centerX, centerY + 40, 380, 48, 0x0a0a15);
     inputBg.setStrokeStyle(2, 0x00ff88);
     
     // Input decoration lines
-    const inputDecor = this.add.rectangle(centerX - 175, centerY + 30, 4, 44, 0x00ff88, 0.5);
+    const inputDecor = this.add.rectangle(centerX - 195, centerY + 40, 4, 48, 0x00ff88, 0.6);
     
-    this.inputText = this.add.text(centerX, centerY + 30, '> awaiting_input_', {
+    this.inputText = this.add.text(centerX, centerY + 40, '> awaiting_input_', {
       fontSize: '14px',
       fontFamily: '"Share Tech Mono", monospace',
       color: '#00ff88',
-      shadow: { offsetX: 0, offsetY: 0, color: '#00ff88', blur: 4, fill: true },
+      shadow: { offsetX: 0, offsetY: 0, color: '#00ff88', blur: 5, fill: true },
     }).setOrigin(0.5);
     
     // Create HTML input for actual typing
-    this.createHtmlInput(centerX, centerY + 30);
+    this.createHtmlInput(centerX, centerY + 40);
+    
+    // Button row with 3 buttons - Submit, Hint, Abort
+    const buttonY = centerY + 105;
     
     // Submit button - Neon cyan
-    const submitBtn = this.add.rectangle(centerX - 75, centerY + 95, 120, 42, 0x00ffff, 0.2);
+    const submitBtn = this.add.rectangle(centerX - 130, buttonY, 120, 44, 0x00ffff, 0.2);
     submitBtn.setStrokeStyle(2, 0x00ffff);
     submitBtn.setInteractive({ useHandCursor: true });
-    const submitText = this.add.text(centerX - 75, centerY + 95, '[ SUBMIT ]', {
+    const submitText = this.add.text(centerX - 130, buttonY, '[ SUBMIT ]', {
       fontSize: '11px',
       fontFamily: 'Orbitron, sans-serif',
       color: '#00ffff',
@@ -1079,11 +1122,45 @@ export class MainScene extends Phaser.Scene {
       this.submitAnswer();
     });
     
+    // Hint button - Neon orange/gold (disabled if already used)
+    const hintBtnColor = obj.hintUsed ? 0x444444 : 0xffaa00;
+    const hintBtn = this.add.rectangle(centerX, buttonY, 120, 44, hintBtnColor, 0.2);
+    hintBtn.setStrokeStyle(2, hintBtnColor);
+    if (!obj.hintUsed) {
+      hintBtn.setInteractive({ useHandCursor: true });
+    }
+    const hintBtnText = this.add.text(centerX, buttonY - 6, obj.hintUsed ? '[ USED ]' : '[ HINT ]', {
+      fontSize: '11px',
+      fontFamily: 'Orbitron, sans-serif',
+      color: obj.hintUsed ? '#666666' : '#ffaa00',
+      shadow: obj.hintUsed ? undefined : { offsetX: 0, offsetY: 0, color: '#ffaa00', blur: 8, fill: true },
+    }).setOrigin(0.5);
+    const hintCostText = this.add.text(centerX, buttonY + 10, obj.hintUsed ? '' : `-${HINT_COST} PTS`, {
+      fontSize: '9px',
+      fontFamily: '"Share Tech Mono", monospace',
+      color: '#ff6666',
+    }).setOrigin(0.5);
+    
+    if (!obj.hintUsed) {
+      hintBtn.on('pointerover', () => {
+        hintBtn.setFillStyle(0xffaa00, 0.4);
+        hintBtnText.setColor('#ffffff');
+      });
+      hintBtn.on('pointerout', () => {
+        hintBtn.setFillStyle(0xffaa00, 0.2);
+        hintBtnText.setColor('#ffaa00');
+      });
+      hintBtn.on('pointerdown', (pointer: Phaser.Input.Pointer, localX: number, localY: number, event: Phaser.Types.Input.EventData) => {
+        event.stopPropagation();
+        this.showHintConfirmation();
+      });
+    }
+    
     // Close button - Neon magenta
-    const closeBtn = this.add.rectangle(centerX + 75, centerY + 95, 120, 42, 0xff0066, 0.2);
+    const closeBtn = this.add.rectangle(centerX + 130, buttonY, 120, 44, 0xff0066, 0.2);
     closeBtn.setStrokeStyle(2, 0xff0066);
     closeBtn.setInteractive({ useHandCursor: true });
-    const closeText = this.add.text(centerX + 75, centerY + 95, '[ ABORT ]', {
+    const closeText = this.add.text(centerX + 130, buttonY, '[ ABORT ]', {
       fontSize: '11px',
       fontFamily: 'Orbitron, sans-serif',
       color: '#ff0066',
@@ -1104,27 +1181,173 @@ export class MainScene extends Phaser.Scene {
     });
     
     // Instructions with terminal style
-    const instructions = this.add.text(centerX, centerY + 140, '// input answer → press ENTER or SUBMIT', {
+    const instructions = this.add.text(centerX, centerY + 155, '// type answer → ENTER to submit | ESC to abort', {
       fontSize: '10px',
       fontFamily: '"Share Tech Mono", monospace',
       color: '#4a6a8a',
     }).setOrigin(0.5);
     
-    // Corner decorations
-    const cornerSize = 12;
+    // Corner decorations - larger to match new panel
+    const cornerSize = 14;
+    const panelHalfWidth = 225;
+    const panelHalfHeight = 195;
     const corners = [
-      this.add.rectangle(centerX - 195 + cornerSize/2, centerY - 155 + cornerSize/2, cornerSize, 2, 0x00ffff),
-      this.add.rectangle(centerX - 195 + 1, centerY - 155 + cornerSize/2, 2, cornerSize, 0x00ffff),
-      this.add.rectangle(centerX + 195 - cornerSize/2, centerY - 155 + cornerSize/2, cornerSize, 2, 0x00ffff),
-      this.add.rectangle(centerX + 195 - 1, centerY - 155 + cornerSize/2, 2, cornerSize, 0x00ffff),
-      this.add.rectangle(centerX - 195 + cornerSize/2, centerY + 155 - cornerSize/2, cornerSize, 2, 0xff00ff),
-      this.add.rectangle(centerX - 195 + 1, centerY + 155 - cornerSize/2, 2, cornerSize, 0xff00ff),
-      this.add.rectangle(centerX + 195 - cornerSize/2, centerY + 155 - cornerSize/2, cornerSize, 2, 0xff00ff),
-      this.add.rectangle(centerX + 195 - 1, centerY + 155 - cornerSize/2, 2, cornerSize, 0xff00ff),
+      this.add.rectangle(centerX - panelHalfWidth + cornerSize/2, centerY - panelHalfHeight + cornerSize/2, cornerSize, 2, 0x00ffff),
+      this.add.rectangle(centerX - panelHalfWidth + 1, centerY - panelHalfHeight + cornerSize/2, 2, cornerSize, 0x00ffff),
+      this.add.rectangle(centerX + panelHalfWidth - cornerSize/2, centerY - panelHalfHeight + cornerSize/2, cornerSize, 2, 0x00ffff),
+      this.add.rectangle(centerX + panelHalfWidth - 1, centerY - panelHalfHeight + cornerSize/2, 2, cornerSize, 0x00ffff),
+      this.add.rectangle(centerX - panelHalfWidth + cornerSize/2, centerY + panelHalfHeight - cornerSize/2, cornerSize, 2, 0xff00ff),
+      this.add.rectangle(centerX - panelHalfWidth + 1, centerY + panelHalfHeight - cornerSize/2, 2, cornerSize, 0xff00ff),
+      this.add.rectangle(centerX + panelHalfWidth - cornerSize/2, centerY + panelHalfHeight - cornerSize/2, cornerSize, 2, 0xff00ff),
+      this.add.rectangle(centerX + panelHalfWidth - 1, centerY + panelHalfHeight - cornerSize/2, 2, cornerSize, 0xff00ff),
     ];
     
-    this.questionBox.add([overlay, outerGlow, boxBg, innerPanel, header, headerText, categoryBg, hintText, questionText, inputBg, inputDecor, this.inputText, submitBtn, submitText, closeBtn, closeText, instructions, ...corners]);
+    this.questionBox.add([
+      overlay, outerGlow, boxBg, innerPanel, header, headerText, pointsBadge, pointsText,
+      categoryBg, categoryText, questionBg, questionText, hintAreaBg, this.revealedHintText,
+      inputBg, inputDecor, this.inputText, submitBtn, submitText, hintBtn, hintBtnText, hintCostText,
+      closeBtn, closeText, instructions, ...corners
+    ]);
     this.questionBox.setVisible(true);
+  }
+
+  private showHintConfirmation() {
+    if (this.isHintConfirmOpen || !this.currentQuestion) return;
+    this.isHintConfirmOpen = true;
+    
+    const centerX = this.cameras.main.width / 2;
+    const centerY = this.cameras.main.height / 2;
+    
+    // Create confirmation container
+    this.hintConfirmBox = this.add.container(0, 0);
+    this.hintConfirmBox.setScrollFactor(0);
+    this.hintConfirmBox.setDepth(3500);
+    
+    // Semi-transparent overlay on top of question box
+    const confirmOverlay = this.add.rectangle(centerX, centerY, this.cameras.main.width, this.cameras.main.height, 0x000000, 0.6);
+    confirmOverlay.setInteractive();
+    confirmOverlay.on('pointerdown', (pointer: Phaser.Input.Pointer, localX: number, localY: number, event: Phaser.Types.Input.EventData) => {
+      event.stopPropagation();
+    });
+    
+    // Confirmation dialog
+    const dialogGlow = this.add.rectangle(centerX, centerY, 320, 180, 0xffaa00, 0.15);
+    dialogGlow.setStrokeStyle(2, 0xffaa00, 0.5);
+    
+    const dialogBg = this.add.rectangle(centerX, centerY, 310, 170, 0x0a0a15, 0.98);
+    dialogBg.setStrokeStyle(2, 0xffaa00);
+    
+    const warningIcon = this.add.text(centerX, centerY - 55, '⚠️', {
+      fontSize: '28px',
+    }).setOrigin(0.5);
+    
+    const confirmTitle = this.add.text(centerX, centerY - 20, 'USE HINT?', {
+      fontSize: '16px',
+      fontFamily: 'Orbitron, sans-serif',
+      color: '#ffaa00',
+      shadow: { offsetX: 0, offsetY: 0, color: '#ffaa00', blur: 10, fill: true },
+    }).setOrigin(0.5);
+    
+    const confirmDesc = this.add.text(centerX, centerY + 10, `This will deduct ${HINT_COST} points from your score`, {
+      fontSize: '12px',
+      fontFamily: '"Share Tech Mono", monospace',
+      color: '#cccccc',
+    }).setOrigin(0.5);
+    
+    // Yes button
+    const yesBtn = this.add.rectangle(centerX - 60, centerY + 55, 100, 38, 0xffaa00, 0.2);
+    yesBtn.setStrokeStyle(2, 0xffaa00);
+    yesBtn.setInteractive({ useHandCursor: true });
+    const yesText = this.add.text(centerX - 60, centerY + 55, '[ YES ]', {
+      fontSize: '11px',
+      fontFamily: 'Orbitron, sans-serif',
+      color: '#ffaa00',
+    }).setOrigin(0.5);
+    
+    yesBtn.on('pointerover', () => { yesBtn.setFillStyle(0xffaa00, 0.4); yesText.setColor('#ffffff'); });
+    yesBtn.on('pointerout', () => { yesBtn.setFillStyle(0xffaa00, 0.2); yesText.setColor('#ffaa00'); });
+    yesBtn.on('pointerdown', (pointer: Phaser.Input.Pointer, localX: number, localY: number, event: Phaser.Types.Input.EventData) => {
+      event.stopPropagation();
+      this.useHint();
+    });
+    
+    // No button
+    const noBtn = this.add.rectangle(centerX + 60, centerY + 55, 100, 38, 0x666666, 0.2);
+    noBtn.setStrokeStyle(2, 0x666666);
+    noBtn.setInteractive({ useHandCursor: true });
+    const noText = this.add.text(centerX + 60, centerY + 55, '[ NO ]', {
+      fontSize: '11px',
+      fontFamily: 'Orbitron, sans-serif',
+      color: '#888888',
+    }).setOrigin(0.5);
+    
+    noBtn.on('pointerover', () => { noBtn.setFillStyle(0x666666, 0.4); noText.setColor('#ffffff'); });
+    noBtn.on('pointerout', () => { noBtn.setFillStyle(0x666666, 0.2); noText.setColor('#888888'); });
+    noBtn.on('pointerdown', (pointer: Phaser.Input.Pointer, localX: number, localY: number, event: Phaser.Types.Input.EventData) => {
+      event.stopPropagation();
+      this.hideHintConfirmation();
+    });
+    
+    this.hintConfirmBox.add([confirmOverlay, dialogGlow, dialogBg, warningIcon, confirmTitle, confirmDesc, yesBtn, yesText, noBtn, noText]);
+  }
+
+  private hideHintConfirmation() {
+    if (this.hintConfirmBox) {
+      this.hintConfirmBox.destroy();
+    }
+    this.isHintConfirmOpen = false;
+    
+    // Refocus the input
+    if (this.htmlInput) {
+      this.htmlInput.focus();
+    }
+  }
+
+  private useHint() {
+    if (!this.currentQuestion) return;
+    
+    // Deduct points (can go negative)
+    this.score -= HINT_COST;
+    this.scoreText.setText(`SCORE: ${this.score}`);
+    
+    // Emit negative score update to sync with team leaderboard
+    this.game.events.emit('scoreUpdate', -HINT_COST);
+    
+    // Mark hint as used
+    this.currentQuestion.hintUsed = true;
+    
+    // Hide confirmation and refresh the question display
+    this.hideHintConfirmation();
+    
+    // Update the hint text in the current question box
+    if (this.revealedHintText) {
+      this.revealedHintText.setText(`💡 ${this.currentQuestion.question.detailedHint}`);
+      this.revealedHintText.setColor('#ffaa00');
+      this.revealedHintText.setFontSize(12);
+    }
+    
+    // Show hint reveal animation
+    this.showHintRevealEffect();
+  }
+
+  private showHintRevealEffect() {
+    const centerX = this.cameras.main.width / 2;
+    const centerY = this.cameras.main.height / 2 - 10;
+    
+    // Flash effect
+    const flash = this.add.rectangle(centerX, centerY, 400, 36, 0xffaa00, 0.4);
+    flash.setScrollFactor(0);
+    flash.setDepth(3100);
+    
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      duration: 500,
+      ease: 'Power2',
+      onComplete: () => {
+        flash.destroy();
+      }
+    });
   }
 
   private createHtmlInput(x: number, y: number) {
