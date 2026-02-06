@@ -995,12 +995,8 @@ export class MainScene extends Phaser.Scene {
     // Remove existing HTML input if any
     this.removeHtmlInput();
     
-    // Dark overlay with scanlines effect
+    // Dark overlay with scanlines effect - NOT interactive to allow button clicks through
     const overlay = this.add.rectangle(centerX, centerY, this.cameras.main.width, this.cameras.main.height, 0x000000, 0.88);
-    overlay.setInteractive();
-    overlay.on('pointerdown', (pointer: Phaser.Input.Pointer, localX: number, localY: number, event: Phaser.Types.Input.EventData) => {
-      event.stopPropagation();
-    });
     
     // Outer glow border - larger panel for new layout
     const outerGlow = this.add.rectangle(centerX, centerY, 460, 400, 0x00ffff, 0.12);
