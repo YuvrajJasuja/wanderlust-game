@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 const TILE_SIZE = 32;
 const MAP_WIDTH = 120;
 const MAP_HEIGHT = 120;
-const PLAYER_SPEED = 400;
+const PLAYER_SPEED = 240;
 
 // City terrain types
 const TERRAIN = {
@@ -995,16 +995,21 @@ export class MainScene extends Phaser.Scene {
     // Remove existing HTML input if any
     this.removeHtmlInput();
     
-    // Dark overlay with scanlines effect - NOT interactive to allow button clicks through
+    // Dark overlay - click to close (abort)
     const overlay = this.add.rectangle(centerX, centerY, this.cameras.main.width, this.cameras.main.height, 0x000000, 0.88);
+    overlay.setInteractive({ useHandCursor: false });
+    overlay.on('pointerdown', () => {
+      this.hideQuestion();
+    });
     
     // Outer glow border - larger panel for new layout
     const outerGlow = this.add.rectangle(centerX, centerY, 460, 400, 0x00ffff, 0.12);
     outerGlow.setStrokeStyle(2, 0x00ffff, 0.4);
     
-    // Main holographic panel
+    // Main holographic panel - interactive to block overlay clicks
     const boxBg = this.add.rectangle(centerX, centerY, 450, 390, 0x0a0a15, 0.96);
     boxBg.setStrokeStyle(2, 0x00ffff);
+    boxBg.setInteractive(); // Block clicks from reaching overlay
     
     // Inner gradient effect
     const innerPanel = this.add.rectangle(centerX, centerY, 440, 380, 0x080812, 0.85);
@@ -1094,16 +1099,18 @@ export class MainScene extends Phaser.Scene {
     // Button row with 3 buttons - Submit, Hint, Abort
     const buttonY = centerY + 105;
     
-    // Submit button - Neon cyan
+    // Submit button - Neon cyan (higher depth for reliable clicks)
     const submitBtn = this.add.rectangle(centerX - 130, buttonY, 120, 44, 0x00ffff, 0.2);
     submitBtn.setStrokeStyle(2, 0x00ffff);
     submitBtn.setInteractive({ useHandCursor: true });
+    submitBtn.setDepth(3010);
     const submitText = this.add.text(centerX - 130, buttonY, '[ SUBMIT ]', {
       fontSize: '11px',
       fontFamily: 'Orbitron, sans-serif',
       color: '#00ffff',
       shadow: { offsetX: 0, offsetY: 0, color: '#00ffff', blur: 8, fill: true },
     }).setOrigin(0.5);
+    submitText.setDepth(3011);
     
     submitBtn.on('pointerover', () => {
       submitBtn.setFillStyle(0x00ffff, 0.4);
@@ -1113,8 +1120,7 @@ export class MainScene extends Phaser.Scene {
       submitBtn.setFillStyle(0x00ffff, 0.2);
       submitText.setColor('#00ffff');
     });
-    submitBtn.on('pointerdown', (pointer: Phaser.Input.Pointer, localX: number, localY: number, event: Phaser.Types.Input.EventData) => {
-      event.stopPropagation();
+    submitBtn.on('pointerdown', () => {
       this.submitAnswer();
     });
     
@@ -1122,6 +1128,7 @@ export class MainScene extends Phaser.Scene {
     const hintBtnColor = obj.hintUsed ? 0x444444 : 0xffaa00;
     const hintBtn = this.add.rectangle(centerX, buttonY, 120, 44, hintBtnColor, 0.2);
     hintBtn.setStrokeStyle(2, hintBtnColor);
+    hintBtn.setDepth(3010);
     if (!obj.hintUsed) {
       hintBtn.setInteractive({ useHandCursor: true });
     }
@@ -1131,11 +1138,13 @@ export class MainScene extends Phaser.Scene {
       color: obj.hintUsed ? '#666666' : '#ffaa00',
       shadow: obj.hintUsed ? undefined : { offsetX: 0, offsetY: 0, color: '#ffaa00', blur: 8, fill: true },
     }).setOrigin(0.5);
+    hintBtnText.setDepth(3011);
     const hintCostText = this.add.text(centerX, buttonY + 10, obj.hintUsed ? '' : `-${HINT_COST} PTS`, {
       fontSize: '9px',
       fontFamily: '"Share Tech Mono", monospace',
       color: '#ff6666',
     }).setOrigin(0.5);
+    hintCostText.setDepth(3011);
     
     if (!obj.hintUsed) {
       hintBtn.on('pointerover', () => {
@@ -1146,8 +1155,7 @@ export class MainScene extends Phaser.Scene {
         hintBtn.setFillStyle(0xffaa00, 0.2);
         hintBtnText.setColor('#ffaa00');
       });
-      hintBtn.on('pointerdown', (pointer: Phaser.Input.Pointer, localX: number, localY: number, event: Phaser.Types.Input.EventData) => {
-        event.stopPropagation();
+      hintBtn.on('pointerdown', () => {
         this.showHintConfirmation();
       });
     }
@@ -1156,12 +1164,14 @@ export class MainScene extends Phaser.Scene {
     const closeBtn = this.add.rectangle(centerX + 130, buttonY, 120, 44, 0xff0066, 0.2);
     closeBtn.setStrokeStyle(2, 0xff0066);
     closeBtn.setInteractive({ useHandCursor: true });
+    closeBtn.setDepth(3010);
     const closeText = this.add.text(centerX + 130, buttonY, '[ ABORT ]', {
       fontSize: '11px',
       fontFamily: 'Orbitron, sans-serif',
       color: '#ff0066',
       shadow: { offsetX: 0, offsetY: 0, color: '#ff0066', blur: 8, fill: true },
     }).setOrigin(0.5);
+    closeText.setDepth(3011);
     
     closeBtn.on('pointerover', () => {
       closeBtn.setFillStyle(0xff0066, 0.4);
@@ -1171,8 +1181,7 @@ export class MainScene extends Phaser.Scene {
       closeBtn.setFillStyle(0xff0066, 0.2);
       closeText.setColor('#ff0066');
     });
-    closeBtn.on('pointerdown', (pointer: Phaser.Input.Pointer, localX: number, localY: number, event: Phaser.Types.Input.EventData) => {
-      event.stopPropagation();
+    closeBtn.on('pointerdown', () => {
       this.hideQuestion();
     });
     

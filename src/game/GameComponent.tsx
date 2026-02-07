@@ -3,8 +3,9 @@ import Phaser from 'phaser';
 import { MainScene } from './scenes/MainScene';
 import { useTeam } from '@/contexts/TeamContext';
 import Leaderboard from '@/components/team/Leaderboard';
+import TeamCodeHUD from '@/components/game/TeamCodeHUD';
 import { Button } from '@/components/ui/button';
-import { LogOut, Users, Trophy } from 'lucide-react';
+import { LogOut, Trophy } from 'lucide-react';
 
 const GameComponent = () => {
   const gameRef = useRef<Phaser.Game | null>(null);
@@ -75,11 +76,13 @@ const GameComponent = () => {
     <div className="relative w-full h-screen overflow-hidden bg-background">
       <div ref={containerRef} className="w-full h-full" />
       
+      {/* Team Code HUD - Pill with collapsible members */}
+      <TeamCodeHUD />
+
       {/* Team Info Overlay */}
       <div className="absolute top-4 left-4 z-10">
         <div className="bg-card/90 backdrop-blur-sm rounded-lg p-3 border border-border shadow-lg">
           <div className="flex items-center gap-2 mb-2">
-            <Users className="w-4 h-4 text-primary" />
             <span className="font-pixel text-xs text-primary">{currentTeam?.name}</span>
           </div>
           <div className="space-y-1 text-xs text-muted-foreground">
